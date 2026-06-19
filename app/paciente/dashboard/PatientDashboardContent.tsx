@@ -5,7 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/lib/auth-context";
-import { getTreatments, getAgendaConfig, getAppointments, addAppointment, updateUser, calculateAge, Treatment, AgendaConfig, Appointment } from "@/lib/auth";
+import { getTreatments, getAgendaConfig, getAppointments, addAppointment, updateAppointment, updateUser, calculateAge, Treatment, AgendaConfig, Appointment } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import {
   User, Calendar, ClipboardList, CreditCard, CheckCircle2, Clock, AlertCircle,
@@ -67,10 +67,14 @@ function PatientDashboardInner() {
     if (!user) return;
 
     // Agrupamos la lógica de carga en una función
-    const cargarDatos = () => {
-      setTreatments(getTreatments(user.rut));
+    const cargarDatos = async () => {
+      const datosTratamientos = await getTreatments(user.rut);
+      const datosCitas = await getAppointments(user.rut);
+      
+      setTreatments(datosTratamientos);
       setAgenda(getAgendaConfig());
-      setAppointments(getAppointments(user.rut));
+      setAppointments(datosCitas);
+      
       setProfileForm({
         birthDate: user.birthDate || "",
         diseases: user.diseases || "",
@@ -121,7 +125,7 @@ function PatientDashboardInner() {
     setEditingProfile(false);
   };
 
-  const handleBookAppointment = () => {
+  const handleBookAppointment = async () => {
     if (!user || !agenda) return;
     setBookingError("");
     setBookingSuccess(false);
@@ -130,11 +134,11 @@ function PatientDashboardInner() {
     if (!bookingForm.time) { setBookingError("Selecciona una hora"); return; }
     if (agenda.disabledDates.includes(bookingForm.date)) { setBookingError("Esta fecha no está disponible"); return; }
 
-    const allAppts = getAppointments();
+    const allAppts = await getAppointments(); 
     const isBooked = allAppts.some(a => a.date === bookingForm.date && a.time === bookingForm.time && a.dentist === bookingForm.dentist && a.status !== "Cancelada");
     if (isBooked) { setBookingError("Este horario ya está reservado con este dentista"); return; }
 
-    addAppointment({
+    await addAppointment({
       patientRut: user.rut,
       patientName: user.name,
       date: bookingForm.date,
@@ -145,17 +149,19 @@ function PatientDashboardInner() {
       status: "Pendiente",
     });
 
-    setAppointments(getAppointments(user.rut));
+    const citasActualizadas = await getAppointments(user.rut);
+    setAppointments(citasActualizadas);
+    
     setBookingSuccess(true);
     setBookingForm({ date: "", time: "", dentist: DENTISTS[0], treatment: TREATMENT_TYPES[0], notes: "" });
     setTimeout(() => setBookingSuccess(false), 3000);
   };
 
-  const handleCancelAppointment = (id: string) => {
+  const handleCancelAppointment = async (id: string) => {
     if (confirm("¿Cancelar esta cita?")) {
-      const { updateAppointment } = require("@/lib/auth");
-      updateAppointment(id, { status: "Cancelada" });
-      setAppointments(getAppointments(user?.rut));
+      await updateAppointment(id, { status: "Cancelada" });
+      const citasActualizadas = await getAppointments(user?.rut);
+      setAppointments(citasActualizadas);
     }
   };
 

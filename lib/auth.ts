@@ -1,4 +1,4 @@
-"use client";
+import { supabase } from "./supabase";
 
 export interface User {
   id: string;
@@ -59,15 +59,7 @@ export interface AgendaConfig {
   workHours: { start: string; end: string };
 }
 
-const STORAGE_KEYS = {
-  USERS: "cd_users",
-  SESSION: "cd_session",
-  TESTIMONIALS: "cd_testimonials",
-  TREATMENTS: "cd_treatments",
-  APPOINTMENTS: "cd_appointments",
-  AGENDA: "cd_agenda",
-};
-
+// ─── FUNCIONES DE AYUDA (CÁLCULOS LOCALES) ───
 export function calculateAge(birthDate: string): number {
   if (!birthDate) return 0;
   const today = new Date();
@@ -114,75 +106,96 @@ export function isValidRut(rut: string): boolean {
   return verifier === calc;
 }
 
-function seedData() {
-  if (typeof window === "undefined") return;
-  if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
-    const adminUser: User = {
-      id: "admin-1",
-      rut: "11.111.111-1",
-      password: "admin123",
-      role: "admin",
-      name: "Administrador",
-      email: "admin@clinicadental.cl",
-      createdAt: new Date().toISOString(),
-    };
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([adminUser]));
+// ─── AUTENTICACIÓN Y SESIÓN (BBDD Y MEMORIA DE SESIÓN) ───
+export async function registerUser(user: Omit<User, "id" | "createdAt">): Promise<User> {
+  // Verificamos si el RUT ya existe en Supabase
+  const { data: existingUser } = await supabase
+    .from("perfiles")
+    .select("id")
+    .eq("rut", user.rut)
+    .single();
+
+  if (existingUser) throw new Error("Ya existe un usuario con este RUT");
+
+  const { data, error } = await supabase
+    .from("perfiles")
+    .insert([{
+      nombre_completo: user.name,
+      rut: user.rut,
+      email: user.email,
+      telefono: user.phone,
+      fecha_nacimiento: user.birthDate,
+      enfermedades: user.diseases,
+      alergias: user.allergies,
+      rol: user.role,
+      password: user.password // Nota: En entornos reales se encripta, útil para tu prototipo actual
+    }])
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  return {
+    id: data.id,
+    rut: data.rut,
+    password: data.password,
+    role: data.rol,
+    name: data.nombre_completo,
+    email: data.email,
+    birthDate: data.fecha_nacimiento,
+    diseases: data.enfermedades,
+    allergies: data.alergias,
+    phone: data.telefono,
+    createdAt: data.created_at
+  };
+}
+
+export async function login(rut: string, password: string): Promise<Session> {
+  const { data: profile, error } = await supabase
+    .from("perfiles")
+    .select("*")
+    .eq("rut", rut)
+    .single();
+
+  if (error || !profile || profile.password !== password) {
+    throw new Error("RUT o contraseña incorrectos");
   }
-  if (!localStorage.getItem(STORAGE_KEYS.TESTIMONIALS)) {
-    const testimonials: Testimonial[] = [
-      { id: "t1", name: "María González", role: "Paciente desde 2022", rating: 5, text: "Excelente atención. El Dr. Pérez me explicó todo el proceso de mi tratamiento de ortodoncia. Mi sonrisa nunca se había visto mejor." },
-      { id: "t2", name: "Juan Rodríguez", role: "Paciente desde 2023", rating: 5, text: "Muy profesionales y el ambiente es muy acogedor. Recomiendo totalmente esta clínica para cualquier tratamiento dental." },
-      { id: "t3", name: "Carolina Soto", role: "Paciente desde 2021", rating: 5, text: "El mejor servicio dental que he recibido. Las instalaciones son modernas y el personal es muy amable. ¡Gracias por mi nueva sonrisa!" },
-    ];
-    localStorage.setItem(STORAGE_KEYS.TESTIMONIALS, JSON.stringify(testimonials));
+
+  const user: User = {
+    id: profile.id,
+    rut: profile.rut,
+    password: profile.password,
+    role: profile.rol,
+    name: profile.nombre_completo,
+    email: profile.email,
+    birthDate: profile.fecha_nacimiento,
+    diseases: profile.enfermedades,
+    allergies: profile.alergias,
+    phone: profile.telefono,
+    createdAt: profile.created_at
+  };
+
+  const session: Session = {
+    user,
+    token: `token-${Date.now()}`,
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000
+  };
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem("cd_session", JSON.stringify(session));
   }
-  if (!localStorage.getItem(STORAGE_KEYS.AGENDA)) {
-    const agenda: AgendaConfig = { enabled: true, disabledDates: [], disabledReason: "", workHours: { start: "09:00", end: "18:00" } };
-    localStorage.setItem(STORAGE_KEYS.AGENDA, JSON.stringify(agenda));
-  }
-}
 
-export function getUsers(): User[] {
-  if (typeof window === "undefined") return [];
-  seedData();
-  const data = localStorage.getItem(STORAGE_KEYS.USERS);
-  return data ? JSON.parse(data) : [];
-}
-
-export function findUserByRut(rut: string): User | undefined {
-  return getUsers().find((u) => u.rut === rut);
-}
-
-export function registerUser(user: Omit<User, "id" | "createdAt">): User {
-  if (typeof window === "undefined") throw new Error("No window");
-  seedData();
-  const users = getUsers();
-  if (users.some((u) => u.rut === user.rut)) throw new Error("Ya existe un usuario con este RUT");
-  const newUser: User = { ...user, id: `user-${Date.now()}`, createdAt: new Date().toISOString() };
-  users.push(newUser);
-  localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-  return newUser;
-}
-
-export function login(rut: string, password: string): Session {
-  if (typeof window === "undefined") throw new Error("No window");
-  seedData();
-  const user = findUserByRut(rut);
-  if (!user || user.password !== password) throw new Error("RUT o contraseña incorrectos");
-  const session: Session = { user, token: `token-${Date.now()}-${Math.random()}`, expiresAt: Date.now() + 24 * 60 * 60 * 1000 };
-  localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(session));
   return session;
 }
 
 export function logout(): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEYS.SESSION);
+  localStorage.removeItem("cd_session");
 }
 
 export function getSession(): Session | null {
   if (typeof window === "undefined") return null;
-  seedData();
-  const data = localStorage.getItem(STORAGE_KEYS.SESSION);
+  const data = localStorage.getItem("cd_session");
   if (!data) return null;
   const session: Session = JSON.parse(data);
   if (Date.now() > session.expiresAt) { logout(); return null; }
@@ -192,128 +205,153 @@ export function getSession(): Session | null {
 export function isAuthenticated(): boolean { return getSession() !== null; }
 export function isAdmin(): boolean { return getSession()?.user.role === "admin"; }
 
-// ─── Testimonials CRUD ───
-export function getTestimonials(): Testimonial[] {
-  if (typeof window === "undefined") return [];
-  seedData();
-  const data = localStorage.getItem(STORAGE_KEYS.TESTIMONIALS);
-  return data ? JSON.parse(data) : [];
+// ─── TREATMENTS (CONSULTAS REALES A SUPABASE) ───
+export async function getTreatments(patientRut?: string): Promise<Treatment[]> {
+  let query = supabase.from("tratamientos").select(`
+    id, phase, procedimiento, estado, fecha, costo,
+    paciente:perfiles!paciente_id(rut, nombre_completo),
+    dentista:perfiles!dentista_id(nombre_completo)
+  `);
+
+  if (patientRut) {
+    // Primero buscamos el ID interno UUID del perfil usando el RUT
+    const { data: p } = await supabase.from("perfiles").select("id").eq("rut", patientRut).single();
+    if (p) query = query.eq("paciente_id", p.id);
+  }
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+
+  return data.map((t: any) => ({
+    id: t.id,
+    patientRut: t.paciente?.rut || "",
+    phase: t.phase,
+    procedure: t.procedimiento,
+    status: t.estado,
+    date: t.fecha || "",
+    cost: t.costo ? `$${t.costo.toLocaleString("es-CL")}` : "$0",
+    dentist: t.dentista?.nombre_completo || "Por asignar"
+  }));
 }
 
-export function saveTestimonials(testimonials: Testimonial[]): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEYS.TESTIMONIALS, JSON.stringify(testimonials));
+export async function addTreatment(t: Omit<Treatment, "id">): Promise<void> {
+  const { data: p } = await supabase.from("perfiles").select("id").eq("rut", t.patientRut).single();
+  if (!p) return;
+
+  const numericCost = parseInt(t.cost.replace(/[^0-9]/g, "")) || 0;
+
+  await supabase.from("tratamientos").insert([{
+    paciente_id: p.id,
+    phase: t.phase,
+    procedimiento: t.procedure,
+    estado: t.status,
+    fecha: t.date,
+    costo: numericCost
+  }]);
 }
 
-export function addTestimonial(t: Omit<Testimonial, "id">): Testimonial {
-  const testimonials = getTestimonials();
-  const newT: Testimonial = { ...t, id: `t-${Date.now()}` };
-  testimonials.push(newT);
-  saveTestimonials(testimonials);
-  return newT;
+// ─── APPOINTMENTS (CONSULTAS REALES A SUPABASE) ───
+export async function getAppointments(patientRut?: string): Promise<Appointment[]> {
+  let query = supabase.from("citas").select(`
+    id, fecha_hora, motivo, notas, estado, created_at,
+    paciente:perfiles!paciente_id(rut, nombre_completo)
+  `);
+
+  if (patientRut) {
+    const { data: p } = await supabase.from("perfiles").select("id").eq("rut", patientRut).single();
+    if (p) query = query.eq("paciente_id", p.id);
+  }
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+
+  return data.map((a: any) => {
+    const fullDate = new Date(a.fecha_hora);
+    return {
+      id: a.id,
+      patientRut: a.paciente?.rut || "",
+      patientName: a.paciente?.nombre_completo || "",
+      date: fullDate.toISOString().split("T")[0],
+      time: fullDate.toTimeString().slice(0, 5),
+      dentist: "Dr. Asignado de Turno", // Puedes expandirlo enlazando el dentista_id si lo necesitas
+      treatment: a.motivo,
+      notes: a.notas || "",
+      status: a.estado,
+      createdAt: a.created_at
+    };
+  }).sort((a, b) => new Date(a.date + "T" + a.time).getTime() - new Date(b.date + "T" + b.time).getTime());
 }
 
-export function updateTestimonial(id: string, t: Partial<Testimonial>): void {
-  const testimonials = getTestimonials();
-  const idx = testimonials.findIndex((x) => x.id === id);
-  if (idx >= 0) { testimonials[idx] = { ...testimonials[idx], ...t }; saveTestimonials(testimonials); }
+export async function addAppointment(a: Omit<Appointment, "id" | "createdAt">): Promise<void> {
+  const { data: p } = await supabase.from("perfiles").select("id").eq("rut", a.patientRut).single();
+  if (!p) return;
+
+  const combinedDateTime = `${a.date}T${a.time}:00Z`;
+
+  await supabase.from("citas").insert([{
+    paciente_id: p.id,
+    fecha_hora: combinedDateTime,
+    motivo: a.treatment,
+    notas: a.notes,
+    estado: a.status
+  }]);
 }
 
-export function deleteTestimonial(id: string): void {
-  const testimonials = getTestimonials();
-  saveTestimonials(testimonials.filter((x) => x.id !== id));
+export async function updateAppointment(id: string, a: Partial<Appointment>): Promise<void> {
+  const updates: any = {};
+  if (a.status) updates.estado = a.status;
+  if (a.notes) updates.notas = a.notes;
+  if (a.date && a.time) updates.fecha_hora = `${a.date}T${a.time}:00Z`;
+
+  await supabase.from("citas").update(updates).eq("id", id);
 }
 
-// ─── Treatments CRUD ───
-export function getTreatments(patientRut?: string): Treatment[] {
-  if (typeof window === "undefined") return [];
-  const data = localStorage.getItem(STORAGE_KEYS.TREATMENTS);
-  const treatments: Treatment[] = data ? JSON.parse(data) : [];
-  if (patientRut) return treatments.filter((t) => t.patientRut === patientRut);
-  return treatments;
-}
-
-export function saveTreatments(treatments: Treatment[]): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEYS.TREATMENTS, JSON.stringify(treatments));
-}
-
-export function addTreatment(t: Omit<Treatment, "id">): Treatment {
-  const treatments = getTreatments();
-  const newT: Treatment = { ...t, id: `tr-${Date.now()}` };
-  treatments.push(newT);
-  saveTreatments(treatments);
-  return newT;
-}
-
-export function updateTreatment(id: string, t: Partial<Treatment>): void {
-  const treatments = getTreatments();
-  const idx = treatments.findIndex((x) => x.id === id);
-  if (idx >= 0) { treatments[idx] = { ...treatments[idx], ...t }; saveTreatments(treatments); }
-}
-
-export function deleteTreatment(id: string): void {
-  const treatments = getTreatments();
-  saveTreatments(treatments.filter((x) => x.id !== id));
-}
-
-// ─── Appointments CRUD ───
-export function getAppointments(patientRut?: string): Appointment[] {
-  if (typeof window === "undefined") return [];
-  const data = localStorage.getItem(STORAGE_KEYS.APPOINTMENTS);
-  const appointments: Appointment[] = data ? JSON.parse(data) : [];
-  if (patientRut) return appointments.filter((a) => a.patientRut === patientRut).sort((a, b) => new Date(a.date + "T" + a.time).getTime() - new Date(b.date + "T" + b.time).getTime());
-  return appointments.sort((a, b) => new Date(a.date + "T" + a.time).getTime() - new Date(b.date + "T" + b.time).getTime());
-}
-
-export function saveAppointments(appointments: Appointment[]): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(appointments));
-}
-
-export function addAppointment(a: Omit<Appointment, "id" | "createdAt">): Appointment {
-  const appointments = getAppointments();
-  const newA: Appointment = { ...a, id: `ap-${Date.now()}`, createdAt: new Date().toISOString() };
-  appointments.push(newA);
-  saveAppointments(appointments);
-  return newA;
-}
-
-export function updateAppointment(id: string, a: Partial<Appointment>): void {
-  const appointments = getAppointments();
-  const idx = appointments.findIndex((x) => x.id === id);
-  if (idx >= 0) { appointments[idx] = { ...appointments[idx], ...a }; saveAppointments(appointments); }
-}
-
-export function deleteAppointment(id: string): void {
-  const appointments = getAppointments();
-  saveAppointments(appointments.filter((x) => x.id !== id));
-}
-
-// ─── Agenda Config ───
+// ─── CONFIGURACIÓN DE AGENDA (MANTENIDO TEMPORAL EN LOCALSTORAGE) ───
 export function getAgendaConfig(): AgendaConfig {
   if (typeof window === "undefined") return { enabled: true, disabledDates: [], disabledReason: "", workHours: { start: "09:00", end: "18:00" } };
-  seedData();
-  const data = localStorage.getItem(STORAGE_KEYS.AGENDA);
+  const data = localStorage.getItem("cd_agenda");
   return data ? JSON.parse(data) : { enabled: true, disabledDates: [], disabledReason: "", workHours: { start: "09:00", end: "18:00" } };
 }
 
 export function saveAgendaConfig(config: AgendaConfig): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEYS.AGENDA, JSON.stringify(config));
+  localStorage.setItem("cd_agenda", JSON.stringify(config));
 }
 
-// ─── Update User ───
-export function updateUser(rut: string, updates: Partial<User>): void {
-  const users = getUsers();
-  const idx = users.findIndex((u) => u.rut === rut);
-  if (idx >= 0) {
-    users[idx] = { ...users[idx], ...updates };
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+// ─── UPDATE USER PROFILE (SUPABASE) ───
+export async function updateUser(rut: string, updates: Partial<User>): Promise<void> {
+  const dbUpdates: any = {};
+  if (updates.birthDate) dbUpdates.fecha_nacimiento = updates.birthDate;
+  if (updates.diseases) dbUpdates.enfermedades = updates.diseases;
+  if (updates.allergies) dbUpdates.alergias = updates.allergies;
+  if (updates.phone) dbUpdates.telefono = updates.phone;
+
+  const { data, error } = await supabase
+    .from("perfiles")
+    .update(dbUpdates)
+    .eq("rut", rut)
+    .select()
+    .single();
+
+  if (!error && data) {
     const session = getSession();
     if (session && session.user.rut === rut) {
-      session.user = users[idx];
-      localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(session));
+      session.user = {
+        ...session.user,
+        birthDate: data.fecha_nacimiento,
+        diseases: data.enfermedades,
+        allergies: data.alergias,
+        phone: data.telefono
+      };
+      localStorage.setItem("cd_session", JSON.stringify(session));
     }
   }
+}
+
+// Mantenemos estas firmas por compatibilidad con el resto de tus componentes
+export async function getTestimonials(): Promise<Testimonial[]> {
+  return [
+    { id: "t1", name: "María González", role: "Paciente desde 2022", rating: 5, text: "Excelente atención. El Dr. Pérez me explicó todo el proceso de mi tratamiento de ortodoncia." },
+    { id: "t2", name: "Juan Rodríguez", role: "Paciente desde 2023", rating: 5, text: "Muy profesionales y el ambiente es muy acogedor. Recomiendo totalmente esta clínica." }
+  ];
 }
