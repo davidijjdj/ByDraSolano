@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/lib/auth-context";
 import { getTreatments, getAgendaConfig, getAppointments, addAppointment, updateUser, calculateAge, Treatment, AgendaConfig, Appointment } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 import {
   User, Calendar, ClipboardList, CreditCard, CheckCircle2, Clock, AlertCircle,
   Edit3, Save, X, Stethoscope, Pill, Info, Cake,
@@ -63,7 +64,10 @@ function PatientDashboardInner() {
   const [bookingSuccess, setBookingSuccess] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+
+    // Agrupamos la lógica de carga en una función
+    const cargarDatos = () => {
       setTreatments(getTreatments(user.rut));
       setAgenda(getAgendaConfig());
       setAppointments(getAppointments(user.rut));
@@ -73,7 +77,36 @@ function PatientDashboardInner() {
         allergies: user.allergies || "",
         phone: user.phone || "",
       });
-    }
+    };
+
+    // Cargamos los datos por primera vez
+    cargarDatos();
+
+    // Abrimos la conexión en tiempo real con Supabase
+    const canalPaciente = supabase
+      .channel('cambios-paciente')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'citas' },
+        (payload) => {
+          console.log('¡Cambio en citas detectado!', payload);
+          cargarDatos();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tratamientos' },
+        (payload) => {
+          console.log('¡Cambio en tratamientos detectado!', payload);
+          cargarDatos();
+        }
+      )
+      .subscribe();
+
+    // Limpiamos la conexión cuando el paciente cierra la pestaña
+    return () => {
+      supabase.removeChannel(canalPaciente);
+    };
   }, [user]);
 
   const handleSaveProfile = () => {
