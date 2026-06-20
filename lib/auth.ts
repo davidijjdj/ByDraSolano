@@ -1,9 +1,15 @@
+"use client";
+
 import { supabase } from "./supabase";
+
+// ============================================================
+// Tipos (idénticos a los que ya usa la UI — no hay que tocar
+// los componentes que solo importan estos tipos)
+// ============================================================
 
 export interface User {
   id: string;
   rut: string;
-  password: string;
   role: "admin" | "paciente";
   name: string;
   email: string;
@@ -59,7 +65,10 @@ export interface AgendaConfig {
   workHours: { start: string; end: string };
 }
 
-// ─── FUNCIONES DE AYUDA (CÁLCULOS LOCALES) ───
+// ============================================================
+// Helpers de RUT (puro cálculo, sin cambios respecto al original)
+// ============================================================
+
 export function calculateAge(birthDate: string): number {
   if (!birthDate) return 0;
   const today = new Date();
@@ -106,252 +115,359 @@ export function isValidRut(rut: string): boolean {
   return verifier === calc;
 }
 
-// ─── AUTENTICACIÓN Y SESIÓN (BBDD Y MEMORIA DE SESIÓN) ───
-export async function registerUser(user: Omit<User, "id" | "createdAt">): Promise<User> {
-  // Verificamos si el RUT ya existe en Supabase
-  const { data: existingUser } = await supabase
-    .from("perfiles")
-    .select("id")
-    .eq("rut", user.rut)
-    .single();
+// Supabase Auth exige un email para iniciar sesión. Como el sitio
+// usa RUT, generamos un email "interno" determinístico a partir del
+// RUT limpio. El email real de contacto del paciente se guarda aparte
+// en profiles.email y nunca se usa para iniciar sesión.
+function rutToAuthEmail(rut: string): string {
+  const clean = rut.replace(/[^0-9kK]/g, "").toLowerCase();
+  return `${clean}@bydrasolano.app`;
+}
 
-  if (existingUser) throw new Error("Ya existe un usuario con este RUT");
-
-  const { data, error } = await supabase
-    .from("perfiles")
-    .insert([{
-      nombre_completo: user.name,
-      rut: user.rut,
-      email: user.email,
-      telefono: user.phone,
-      fecha_nacimiento: user.birthDate,
-      enfermedades: user.diseases,
-      alergias: user.allergies,
-      rol: user.role,
-      password: user.password // Nota: En entornos reales se encripta, útil para tu prototipo actual
-    }])
-    .select()
-    .single();
-
-  if (error) throw new Error(error.message);
-
+function rowToUser(row: any): User {
   return {
-    id: data.id,
-    rut: data.rut,
-    password: data.password,
-    role: data.rol,
-    name: data.nombre_completo,
-    email: data.email,
-    birthDate: data.fecha_nacimiento,
-    diseases: data.enfermedades,
-    allergies: data.alergias,
-    phone: data.telefono,
-    createdAt: data.created_at
+    id: row.id,
+    rut: row.rut,
+    role: row.role,
+    name: row.name,
+    email: row.email,
+    birthDate: row.birth_date ?? undefined,
+    diseases: row.diseases ?? undefined,
+    allergies: row.allergies ?? undefined,
+    phone: row.phone ?? undefined,
+    createdAt: row.created_at,
   };
 }
+
+async function fetchProfile(userId: string): Promise<User | null> {
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single();
+  if (error || !data) return null;
+  return rowToUser(data);
+}
+
+// ============================================================
+// Auth — ahora todo pasa por Supabase Auth, no por localStorage
+// ============================================================
 
 export async function login(rut: string, password: string): Promise<Session> {
-  const { data: profile, error } = await supabase
-    .from("perfiles")
-    .select("*")
-    .eq("rut", rut)
-    .single();
-
-  if (error || !profile || profile.password !== password) {
+  const cleanRut = rut.replace(/[^0-9kK]/g, "");
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: rutToAuthEmail(cleanRut),
+    password,
+  });
+  if (error || !data.session || !data.user) {
     throw new Error("RUT o contraseña incorrectos");
   }
-
-  const user: User = {
-    id: profile.id,
-    rut: profile.rut,
-    password: profile.password,
-    role: profile.rol,
-    name: profile.nombre_completo,
-    email: profile.email,
-    birthDate: profile.fecha_nacimiento,
-    diseases: profile.enfermedades,
-    allergies: profile.alergias,
-    phone: profile.telefono,
-    createdAt: profile.created_at
-  };
-
-  const session: Session = {
+  const user = await fetchProfile(data.user.id);
+  if (!user) throw new Error("No se encontró el perfil del usuario");
+  return {
     user,
-    token: `token-${Date.now()}`,
-    expiresAt: Date.now() + 24 * 60 * 60 * 1000
+    token: data.session.access_token,
+    expiresAt: data.session.expires_at ? data.session.expires_at * 1000 : Date.now() + 24 * 60 * 60 * 1000,
   };
+}
 
-  if (typeof window !== "undefined") {
-    localStorage.setItem("cd_session", JSON.stringify(session));
+export async function registerUser(input: {
+  rut: string;
+  password: string;
+  role: "admin" | "paciente";
+  name: string;
+  email: string;
+  phone?: string;
+  birthDate?: string;
+  diseases?: string;
+  allergies?: string;
+}): Promise<User> {
+  const cleanRut = input.rut.replace(/[^0-9kK]/g, "");
+
+  const { data, error } = await supabase.auth.signUp({
+    email: rutToAuthEmail(cleanRut),
+    password: input.password,
+  });
+
+  if (error) {
+    if (error.message.toLowerCase().includes("already registered")) {
+      throw new Error("Ya existe un usuario con este RUT");
+    }
+    throw new Error(error.message);
+  }
+  if (!data.user) throw new Error("No se pudo crear el usuario");
+
+  const { error: profileError } = await supabase.from("profiles").insert({
+    id: data.user.id,
+    rut: cleanRut,
+    role: input.role,
+    name: input.name,
+    email: input.email,
+    phone: input.phone ?? null,
+    birth_date: input.birthDate || null,
+    diseases: input.diseases ?? null,
+    allergies: input.allergies ?? null,
+  });
+
+  if (profileError) {
+    // Nota: si esto falla, queda un usuario "huérfano" en auth.users sin
+    // perfil. Es un caso borde aceptable para una v1; se puede limpiar
+    // manualmente desde el dashboard de Supabase si llega a pasar.
+    throw new Error(profileError.message);
   }
 
-  return session;
+  return {
+    id: data.user.id,
+    rut: cleanRut,
+    role: input.role,
+    name: input.name,
+    email: input.email,
+    phone: input.phone,
+    birthDate: input.birthDate,
+    diseases: input.diseases,
+    allergies: input.allergies,
+    createdAt: new Date().toISOString(),
+  };
 }
 
-export function logout(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem("cd_session");
+export async function logout(): Promise<void> {
+  await supabase.auth.signOut();
 }
 
-export function getSession(): Session | null {
-  if (typeof window === "undefined") return null;
-  const data = localStorage.getItem("cd_session");
-  if (!data) return null;
-  const session: Session = JSON.parse(data);
-  if (Date.now() > session.expiresAt) { logout(); return null; }
-  return session;
+export async function getSession(): Promise<Session | null> {
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) return null;
+  const user = await fetchProfile(data.session.user.id);
+  if (!user) return null;
+  return {
+    user,
+    token: data.session.access_token,
+    expiresAt: data.session.expires_at ? data.session.expires_at * 1000 : Date.now() + 24 * 60 * 60 * 1000,
+  };
 }
 
-export function isAuthenticated(): boolean { return getSession() !== null; }
-export function isAdmin(): boolean { return getSession()?.user.role === "admin"; }
+export async function isAuthenticated(): Promise<boolean> {
+  return (await getSession()) !== null;
+}
 
-// ─── TREATMENTS (CONSULTAS REALES A SUPABASE) ───
+export async function isAdmin(): Promise<boolean> {
+  const session = await getSession();
+  return session?.user.role === "admin";
+}
+
+// ============================================================
+// Usuarios (panel admin)
+// ============================================================
+
+export async function getUsers(): Promise<User[]> {
+  const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(rowToUser);
+}
+
+export async function findUserByRut(rut: string): Promise<User | undefined> {
+  const { data } = await supabase.from("profiles").select("*").eq("rut", rut).single();
+  return data ? rowToUser(data) : undefined;
+}
+
+export async function updateUser(rut: string, updates: Partial<User>): Promise<void> {
+  const payload: Record<string, any> = {};
+  if (updates.name !== undefined) payload.name = updates.name;
+  if (updates.email !== undefined) payload.email = updates.email;
+  if (updates.phone !== undefined) payload.phone = updates.phone;
+  if (updates.birthDate !== undefined) payload.birth_date = updates.birthDate;
+  if (updates.diseases !== undefined) payload.diseases = updates.diseases;
+  if (updates.allergies !== undefined) payload.allergies = updates.allergies;
+  if (updates.role !== undefined) payload.role = updates.role;
+
+  const { error } = await supabase.from("profiles").update(payload).eq("rut", rut);
+  if (error) throw new Error(error.message);
+}
+
+// ============================================================
+// Testimonios
+// ============================================================
+
+function rowToTestimonial(row: any): Testimonial {
+  return { id: row.id, name: row.name, role: row.role, rating: row.rating, text: row.text };
+}
+
+export async function getTestimonials(): Promise<Testimonial[]> {
+  const { data, error } = await supabase.from("testimonials").select("*").order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(rowToTestimonial);
+}
+
+export async function addTestimonial(t: Omit<Testimonial, "id">): Promise<Testimonial> {
+  const { data, error } = await supabase
+    .from("testimonials")
+    .insert({ name: t.name, role: t.role, rating: t.rating, text: t.text })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return rowToTestimonial(data);
+}
+
+export async function updateTestimonial(id: string, t: Partial<Testimonial>): Promise<void> {
+  const { error } = await supabase.from("testimonials").update(t).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteTestimonial(id: string): Promise<void> {
+  const { error } = await supabase.from("testimonials").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+// ============================================================
+// Tratamientos
+// ============================================================
+
+function rowToTreatment(row: any): Treatment {
+  return {
+    id: row.id,
+    patientRut: row.patient_rut,
+    phase: row.phase,
+    procedure: row.procedure,
+    status: row.status,
+    date: row.date,
+    cost: row.cost,
+    dentist: row.dentist,
+  };
+}
+
 export async function getTreatments(patientRut?: string): Promise<Treatment[]> {
-  let query = supabase.from("tratamientos").select(`
-    id, phase, procedimiento, estado, fecha, costo,
-    paciente:perfiles!paciente_id(rut, nombre_completo),
-    dentista:perfiles!dentista_id(nombre_completo)
-  `);
-
-  if (patientRut) {
-    // Primero buscamos el ID interno UUID del perfil usando el RUT
-    const { data: p } = await supabase.from("perfiles").select("id").eq("rut", patientRut).single();
-    if (p) query = query.eq("paciente_id", p.id);
-  }
-
+  let query = supabase.from("treatments").select("*").order("date", { ascending: false });
+  if (patientRut) query = query.eq("patient_rut", patientRut);
   const { data, error } = await query;
-  if (error || !data) return [];
-
-  return data.map((t: any) => ({
-    id: t.id,
-    patientRut: t.paciente?.rut || "",
-    phase: t.phase,
-    procedure: t.procedimiento,
-    status: t.estado,
-    date: t.fecha || "",
-    cost: t.costo ? `$${t.costo.toLocaleString("es-CL")}` : "$0",
-    dentist: t.dentista?.nombre_completo || "Por asignar"
-  }));
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(rowToTreatment);
 }
 
-export async function addTreatment(t: Omit<Treatment, "id">): Promise<void> {
-  const { data: p } = await supabase.from("perfiles").select("id").eq("rut", t.patientRut).single();
-  if (!p) return;
-
-  const numericCost = parseInt(t.cost.replace(/[^0-9]/g, "")) || 0;
-
-  await supabase.from("tratamientos").insert([{
-    paciente_id: p.id,
-    phase: t.phase,
-    procedimiento: t.procedure,
-    estado: t.status,
-    fecha: t.date,
-    costo: numericCost
-  }]);
+export async function addTreatment(t: Omit<Treatment, "id">): Promise<Treatment> {
+  const { data, error } = await supabase
+    .from("treatments")
+    .insert({
+      patient_rut: t.patientRut,
+      phase: t.phase,
+      procedure: t.procedure,
+      status: t.status,
+      date: t.date,
+      cost: t.cost,
+      dentist: t.dentist,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return rowToTreatment(data);
 }
 
-// ─── APPOINTMENTS (CONSULTAS REALES A SUPABASE) ───
+export async function updateTreatment(id: string, t: Partial<Treatment>): Promise<void> {
+  const payload: Record<string, any> = {};
+  if (t.phase !== undefined) payload.phase = t.phase;
+  if (t.procedure !== undefined) payload.procedure = t.procedure;
+  if (t.status !== undefined) payload.status = t.status;
+  if (t.date !== undefined) payload.date = t.date;
+  if (t.cost !== undefined) payload.cost = t.cost;
+  if (t.dentist !== undefined) payload.dentist = t.dentist;
+  const { error } = await supabase.from("treatments").update(payload).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteTreatment(id: string): Promise<void> {
+  const { error } = await supabase.from("treatments").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+// ============================================================
+// Citas
+// ============================================================
+
+function rowToAppointment(row: any): Appointment {
+  return {
+    id: row.id,
+    patientRut: row.patient_rut,
+    patientName: row.patient_name,
+    date: row.date,
+    time: row.time,
+    dentist: row.dentist,
+    treatment: row.treatment,
+    notes: row.notes,
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
 export async function getAppointments(patientRut?: string): Promise<Appointment[]> {
-  let query = supabase.from("citas").select(`
-    id, fecha_hora, motivo, notas, estado, created_at,
-    paciente:perfiles!paciente_id(rut, nombre_completo)
-  `);
-
-  if (patientRut) {
-    const { data: p } = await supabase.from("perfiles").select("id").eq("rut", patientRut).single();
-    if (p) query = query.eq("paciente_id", p.id);
-  }
-
+  let query = supabase.from("appointments").select("*").order("date", { ascending: true }).order("time", { ascending: true });
+  if (patientRut) query = query.eq("patient_rut", patientRut);
   const { data, error } = await query;
-  if (error || !data) return [];
-
-  return data.map((a: any) => {
-    const fullDate = new Date(a.fecha_hora);
-    return {
-      id: a.id,
-      patientRut: a.paciente?.rut || "",
-      patientName: a.paciente?.nombre_completo || "",
-      date: fullDate.toISOString().split("T")[0],
-      time: fullDate.toTimeString().slice(0, 5),
-      dentist: "Dr. Asignado de Turno", // Puedes expandirlo enlazando el dentista_id si lo necesitas
-      treatment: a.motivo,
-      notes: a.notas || "",
-      status: a.estado,
-      createdAt: a.created_at
-    };
-  }).sort((a, b) => new Date(a.date + "T" + a.time).getTime() - new Date(b.date + "T" + b.time).getTime());
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(rowToAppointment);
 }
 
-export async function addAppointment(a: Omit<Appointment, "id" | "createdAt">): Promise<void> {
-  const { data: p } = await supabase.from("perfiles").select("id").eq("rut", a.patientRut).single();
-  if (!p) return;
-
-  const combinedDateTime = `${a.date}T${a.time}:00Z`;
-
-  await supabase.from("citas").insert([{
-    paciente_id: p.id,
-    fecha_hora: combinedDateTime,
-    motivo: a.treatment,
-    notas: a.notes,
-    estado: a.status
-  }]);
+export async function addAppointment(a: Omit<Appointment, "id" | "createdAt">): Promise<Appointment> {
+  const { data, error } = await supabase
+    .from("appointments")
+    .insert({
+      patient_rut: a.patientRut,
+      patient_name: a.patientName,
+      date: a.date,
+      time: a.time,
+      dentist: a.dentist,
+      treatment: a.treatment,
+      notes: a.notes,
+      status: a.status,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return rowToAppointment(data);
 }
 
 export async function updateAppointment(id: string, a: Partial<Appointment>): Promise<void> {
-  const updates: any = {};
-  if (a.status) updates.estado = a.status;
-  if (a.notes) updates.notas = a.notes;
-  if (a.date && a.time) updates.fecha_hora = `${a.date}T${a.time}:00Z`;
-
-  await supabase.from("citas").update(updates).eq("id", id);
+  const payload: Record<string, any> = {};
+  if (a.date !== undefined) payload.date = a.date;
+  if (a.time !== undefined) payload.time = a.time;
+  if (a.dentist !== undefined) payload.dentist = a.dentist;
+  if (a.treatment !== undefined) payload.treatment = a.treatment;
+  if (a.notes !== undefined) payload.notes = a.notes;
+  if (a.status !== undefined) payload.status = a.status;
+  const { error } = await supabase.from("appointments").update(payload).eq("id", id);
+  if (error) throw new Error(error.message);
 }
 
-// ─── CONFIGURACIÓN DE AGENDA (MANTENIDO TEMPORAL EN LOCALSTORAGE) ───
-export function getAgendaConfig(): AgendaConfig {
-  if (typeof window === "undefined") return { enabled: true, disabledDates: [], disabledReason: "", workHours: { start: "09:00", end: "18:00" } };
-  const data = localStorage.getItem("cd_agenda");
-  return data ? JSON.parse(data) : { enabled: true, disabledDates: [], disabledReason: "", workHours: { start: "09:00", end: "18:00" } };
+export async function deleteAppointment(id: string): Promise<void> {
+  const { error } = await supabase.from("appointments").delete().eq("id", id);
+  if (error) throw new Error(error.message);
 }
 
-export function saveAgendaConfig(config: AgendaConfig): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem("cd_agenda", JSON.stringify(config));
+// ============================================================
+// Configuración de agenda (fila única en agenda_config)
+// ============================================================
+
+const DEFAULT_AGENDA: AgendaConfig = {
+  enabled: true,
+  disabledDates: [],
+  disabledReason: "",
+  workHours: { start: "09:00", end: "18:00" },
+};
+
+export async function getAgendaConfig(): Promise<AgendaConfig> {
+  const { data, error } = await supabase.from("agenda_config").select("*").eq("id", 1).single();
+  if (error || !data) return DEFAULT_AGENDA;
+  return {
+    enabled: data.enabled,
+    disabledDates: data.disabled_dates ?? [],
+    disabledReason: data.disabled_reason ?? "",
+    workHours: data.work_hours ?? DEFAULT_AGENDA.workHours,
+  };
 }
 
-// ─── UPDATE USER PROFILE (SUPABASE) ───
-export async function updateUser(rut: string, updates: Partial<User>): Promise<void> {
-  const dbUpdates: any = {};
-  if (updates.birthDate) dbUpdates.fecha_nacimiento = updates.birthDate;
-  if (updates.diseases) dbUpdates.enfermedades = updates.diseases;
-  if (updates.allergies) dbUpdates.alergias = updates.allergies;
-  if (updates.phone) dbUpdates.telefono = updates.phone;
-
-  const { data, error } = await supabase
-    .from("perfiles")
-    .update(dbUpdates)
-    .eq("rut", rut)
-    .select()
-    .single();
-
-  if (!error && data) {
-    const session = getSession();
-    if (session && session.user.rut === rut) {
-      session.user = {
-        ...session.user,
-        birthDate: data.fecha_nacimiento,
-        diseases: data.enfermedades,
-        allergies: data.alergias,
-        phone: data.telefono
-      };
-      localStorage.setItem("cd_session", JSON.stringify(session));
-    }
-  }
-}
-
-// Mantenemos estas firmas por compatibilidad con el resto de tus componentes
-export async function getTestimonials(): Promise<Testimonial[]> {
-  return [
-    { id: "t1", name: "María González", role: "Paciente desde 2022", rating: 5, text: "Excelente atención. El Dr. Pérez me explicó todo el proceso de mi tratamiento de ortodoncia." },
-    { id: "t2", name: "Juan Rodríguez", role: "Paciente desde 2023", rating: 5, text: "Muy profesionales y el ambiente es muy acogedor. Recomiendo totalmente esta clínica." }
-  ];
+export async function saveAgendaConfig(config: AgendaConfig): Promise<void> {
+  const { error } = await supabase
+    .from("agenda_config")
+    .update({
+      enabled: config.enabled,
+      disabled_dates: config.disabledDates,
+      disabled_reason: config.disabledReason,
+      work_hours: config.workHours,
+    })
+    .eq("id", 1);
+  if (error) throw new Error(error.message);
 }

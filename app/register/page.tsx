@@ -60,7 +60,7 @@ export default function RegisterPage() {
     if (!validate()) return;
     setIsSubmitting(true);
     try {
-      registerUser({
+      await registerUser({
         rut: form.rut,
         password: form.password,
         role: "paciente",

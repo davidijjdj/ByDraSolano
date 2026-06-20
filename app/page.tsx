@@ -19,7 +19,7 @@ export default function Home() {
 
   useEffect(() => {
     setMounted(true);
-    setTestimonials(getTestimonials());
+    getTestimonials().then(setTestimonials);
   }, []);
 
   if (!mounted) {

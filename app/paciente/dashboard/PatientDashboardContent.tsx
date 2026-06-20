@@ -6,7 +6,6 @@ import Footer from "@/components/Footer";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/lib/auth-context";
 import { getTreatments, getAgendaConfig, getAppointments, addAppointment, updateAppointment, updateUser, calculateAge, Treatment, AgendaConfig, Appointment } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
 import {
   User, Calendar, ClipboardList, CreditCard, CheckCircle2, Clock, AlertCircle,
   Edit3, Save, X, Stethoscope, Pill, Info, Cake,
@@ -64,106 +63,68 @@ function PatientDashboardInner() {
   const [bookingSuccess, setBookingSuccess] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-
-    // Agrupamos la lógica de carga en una función
-    const cargarDatos = async () => {
-      const datosTratamientos = await getTreatments(user.rut);
-      const datosCitas = await getAppointments(user.rut);
-      
-      setTreatments(datosTratamientos);
-      setAgenda(getAgendaConfig());
-      setAppointments(datosCitas);
-      
-      setProfileForm({
-        birthDate: user.birthDate || "",
-        diseases: user.diseases || "",
-        allergies: user.allergies || "",
-        phone: user.phone || "",
-      });
-    };
-
-    // Cargamos los datos por primera vez
-    cargarDatos();
-
-    // Abrimos la conexión en tiempo real con Supabase
-    const canalPaciente = supabase
-      .channel('cambios-paciente')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'citas' },
-        (payload) => {
-          console.log('¡Cambio en citas detectado!', payload);
-          cargarDatos();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tratamientos' },
-        (payload) => {
-          console.log('¡Cambio en tratamientos detectado!', payload);
-          cargarDatos();
-        }
-      )
-      .subscribe();
-
-    // Limpiamos la conexión cuando el paciente cierra la pestaña
-    return () => {
-      supabase.removeChannel(canalPaciente);
-    };
-  }, [user]);
-
-  const handleSaveProfile = () => {
-    if (!user) return;
-    updateUser(user.rut, {
-      birthDate: profileForm.birthDate,
-      diseases: profileForm.diseases,
-      allergies: profileForm.allergies,
-      phone: profileForm.phone,
+  if (!user) return;
+  (async () => {
+    setTreatments(await getTreatments(user.rut));
+    setAgenda(await getAgendaConfig());
+    setAppointments(await getAppointments(user.rut));
+    setProfileForm({
+      birthDate: user.birthDate || "",
+      diseases: user.diseases || "",
+      allergies: user.allergies || "",
+      phone: user.phone || "",
     });
-    refreshUser();
-    setEditingProfile(false);
-  };
+  })();
+}, [user]);
 
-  const handleBookAppointment = async () => {
-    if (!user || !agenda) return;
-    setBookingError("");
-    setBookingSuccess(false);
+const handleSaveProfile = async () => {
+  if (!user) return;
+  await updateUser(user.rut, {
+    birthDate: profileForm.birthDate,
+    diseases: profileForm.diseases,
+    allergies: profileForm.allergies,
+    phone: profileForm.phone,
+  });
+  await refreshUser();
+  setEditingProfile(false);
+};
 
-    if (!bookingForm.date) { setBookingError("Selecciona una fecha"); return; }
-    if (!bookingForm.time) { setBookingError("Selecciona una hora"); return; }
-    if (agenda.disabledDates.includes(bookingForm.date)) { setBookingError("Esta fecha no está disponible"); return; }
+const handleBookAppointment = async () => {
+  if (!user || !agenda) return;
+  setBookingError("");
+  setBookingSuccess(false);
 
-    const allAppts = await getAppointments(); 
-    const isBooked = allAppts.some(a => a.date === bookingForm.date && a.time === bookingForm.time && a.dentist === bookingForm.dentist && a.status !== "Cancelada");
-    if (isBooked) { setBookingError("Este horario ya está reservado con este dentista"); return; }
+  if (!bookingForm.date) { setBookingError("Selecciona una fecha"); return; }
+  if (!bookingForm.time) { setBookingError("Selecciona una hora"); return; }
+  if (agenda.disabledDates.includes(bookingForm.date)) { setBookingError("Esta fecha no está disponible"); return; }
 
-    await addAppointment({
-      patientRut: user.rut,
-      patientName: user.name,
-      date: bookingForm.date,
-      time: bookingForm.time,
-      dentist: bookingForm.dentist,
-      treatment: bookingForm.treatment,
-      notes: bookingForm.notes,
-      status: "Pendiente",
-    });
+  const allAppts = await getAppointments();
+  const isBooked = allAppts.some(a => a.date === bookingForm.date && a.time === bookingForm.time && a.dentist === bookingForm.dentist && a.status !== "Cancelada");
+  if (isBooked) { setBookingError("Este horario ya está reservado con este dentista"); return; }
 
-    const citasActualizadas = await getAppointments(user.rut);
-    setAppointments(citasActualizadas);
-    
-    setBookingSuccess(true);
-    setBookingForm({ date: "", time: "", dentist: DENTISTS[0], treatment: TREATMENT_TYPES[0], notes: "" });
-    setTimeout(() => setBookingSuccess(false), 3000);
-  };
+  await addAppointment({
+    patientRut: user.rut,
+    patientName: user.name,
+    date: bookingForm.date,
+    time: bookingForm.time,
+    dentist: bookingForm.dentist,
+    treatment: bookingForm.treatment,
+    notes: bookingForm.notes,
+    status: "Pendiente",
+  });
 
-  const handleCancelAppointment = async (id: string) => {
-    if (confirm("¿Cancelar esta cita?")) {
-      await updateAppointment(id, { status: "Cancelada" });
-      const citasActualizadas = await getAppointments(user?.rut);
-      setAppointments(citasActualizadas);
-    }
-  };
+  setAppointments(await getAppointments(user.rut));
+  setBookingSuccess(true);
+  setBookingForm({ date: "", time: "", dentist: DENTISTS[0], treatment: TREATMENT_TYPES[0], notes: "" });
+  setTimeout(() => setBookingSuccess(false), 3000);
+};
+
+const handleCancelAppointment = async (id: string) => {
+  if (confirm("¿Cancelar esta cita?")) {
+    await updateAppointment(id, { status: "Cancelada" });
+    setAppointments(await getAppointments(user?.rut));
+  }
+};
 
   const completed = treatments.filter((t) => t.status === "Completado").length;
   const total = treatments.length;

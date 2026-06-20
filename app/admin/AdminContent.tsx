@@ -7,10 +7,10 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/lib/auth-context";
 import {
   getUsers, getTestimonials, getTreatments, getAgendaConfig, getAppointments,
-  saveTestimonials, saveTreatments, saveAgendaConfig,
   addTestimonial, updateTestimonial, deleteTestimonial,
   addTreatment, updateTreatment, deleteTreatment,
-  updateUser, calculateAge, Testimonial, Treatment, AgendaConfig, User, Appointment
+  updateAppointment, deleteAppointment,
+  updateUser, calculateAge, saveAgendaConfig, Testimonial, Treatment, AgendaConfig, User, Appointment
 } from "@/lib/auth";
 import {
   LayoutDashboard, CalendarDays, Users, MessageSquare, ClipboardList,
@@ -51,15 +51,21 @@ function AdminInner() {
     loadAllData();
   }, []);
 
-  const loadAllData = () => {
-    const users = getUsers();
-    setAllUsers(users);
-    setPatients(users.filter((u) => u.role === "paciente"));
-    setTestimonials(getTestimonials());
-    setTreatments(getTreatments());
-    setAgenda(getAgendaConfig());
-    setAppointments(getAppointments());
-  };
+const loadAllData = async () => {
+  const [users, testimonialsData, treatmentsData, agendaData, appointmentsData] = await Promise.all([
+    getUsers(),
+    getTestimonials(),
+    getTreatments(),
+    getAgendaConfig(),
+    getAppointments(),
+  ]);
+  setAllUsers(users);
+  setPatients(users.filter((u) => u.role === "paciente"));
+  setTestimonials(testimonialsData);
+  setTreatments(treatmentsData);
+  setAgenda(agendaData);
+  setAppointments(appointmentsData);
+};
 
   const sidebarItems = [
     { id: "dashboard" as Tab, label: "Dashboard", icon: LayoutDashboard },
@@ -94,76 +100,71 @@ function AdminInner() {
     setEditingItem(null);
   };
 
-  const handleSaveTestimonial = (data: any) => {
-    if (editingItem?.id) updateTestimonial(editingItem.id, data);
-    else addTestimonial(data);
-    setTestimonials(getTestimonials());
-    closeModal();
-  };
+const handleSaveTestimonial = async (data: any) => {
+  if (editingItem?.id) await updateTestimonial(editingItem.id, data);
+  else await addTestimonial(data);
+  setTestimonials(await getTestimonials());
+  closeModal();
+};
 
-  const handleDeleteTestimonial = (id: string) => {
-    if (confirm("¿Eliminar este testimonio?")) {
-      deleteTestimonial(id);
-      setTestimonials(getTestimonials());
-    }
-  };
+const handleDeleteTestimonial = async (id: string) => {
+  if (confirm("¿Eliminar este testimonio?")) {
+    await deleteTestimonial(id);
+    setTestimonials(await getTestimonials());
+  }
+};
 
-  const handleSaveTreatment = (data: any) => {
-    if (editingItem?.id) updateTreatment(editingItem.id, data);
-    else addTreatment(data);
-    setTreatments(getTreatments());
-    closeModal();
-  };
+const handleSaveTreatment = async (data: any) => {
+  if (editingItem?.id) await updateTreatment(editingItem.id, data);
+  else await addTreatment(data);
+  setTreatments(await getTreatments());
+  closeModal();
+};
 
-  const handleDeleteTreatment = (id: string) => {
-    if (confirm("¿Eliminar este tratamiento?")) {
-      deleteTreatment(id);
-      setTreatments(getTreatments());
-    }
-  };
+const handleDeleteTreatment = async (id: string) => {
+  if (confirm("¿Eliminar este tratamiento?")) {
+    await deleteTreatment(id);
+    setTreatments(await getTreatments());
+  }
+};
 
-  const handleSaveAgenda = (config: AgendaConfig) => {
-    saveAgendaConfig(config);
-    setAgenda(getAgendaConfig());
-    closeModal();
-  };
+const handleSaveAgenda = async (config: AgendaConfig) => {
+  await saveAgendaConfig(config);
+  setAgenda(await getAgendaConfig());
+  closeModal();
+};
 
-  const handleSavePatient = (rut: string, data: Partial<User>) => {
-    updateUser(rut, data);
-    const users = getUsers();
-    setAllUsers(users);
-    setPatients(users.filter((u) => u.role === "paciente"));
-    closeModal();
-  };
+const handleSavePatient = async (rut: string, data: Partial<User>) => {
+  await updateUser(rut, data);
+  const users = await getUsers();
+  setAllUsers(users);
+  setPatients(users.filter((u) => u.role === "paciente"));
+  closeModal();
+};
 
-  const handleConfirmAppointment = (id: string) => {
-    const { updateAppointment } = require("@/lib/auth");
-    updateAppointment(id, { status: "Confirmada" });
-    setAppointments(getAppointments());
-  };
+const handleConfirmAppointment = async (id: string) => {
+  await updateAppointment(id, { status: "Confirmada" });
+  setAppointments(await getAppointments());
+};
 
-  const handleCompleteAppointment = (id: string) => {
-    const { updateAppointment } = require("@/lib/auth");
-    updateAppointment(id, { status: "Completada" });
-    setAppointments(getAppointments());
-  };
+const handleCompleteAppointment = async (id: string) => {
+  await updateAppointment(id, { status: "Completada" });
+  setAppointments(await getAppointments());
+};
 
-  const handleCancelAppointment = (id: string) => {
-    if (confirm("¿Cancelar esta cita?")) {
-      const { updateAppointment } = require("@/lib/auth");
-      updateAppointment(id, { status: "Cancelada" });
-      setAppointments(getAppointments());
-    }
-  };
+const handleCancelAppointment = async (id: string) => {
+  if (confirm("¿Cancelar esta cita?")) {
+    await updateAppointment(id, { status: "Cancelada" });
+    setAppointments(await getAppointments());
+  }
+};
 
-  const handleDeleteAppointment = (id: string) => {
-    if (confirm("¿Eliminar esta cita permanentemente?")) {
-      const { deleteAppointment } = require("@/lib/auth");
-      deleteAppointment(id);
-      setAppointments(getAppointments());
-    }
-  };
-
+const handleDeleteAppointment = async (id: string) => {
+  if (confirm("¿Eliminar esta cita permanentemente?")) {
+    await deleteAppointment(id);
+    setAppointments(await getAppointments());
+  }
+};
   const filteredPatients = patients.filter((p) =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.rut.includes(searchTerm)
@@ -610,7 +611,17 @@ function AdminInner() {
         <PatientEditModal patient={editingItem} onClose={closeModal} onSave={handleSavePatient} />
       )}
       {modalOpen && modalType === "user" && (
-        <UserRoleModal user={editingItem} onClose={closeModal} onSave={(rut, role) => { updateUser(rut, { role }); const users = getUsers(); setAllUsers(users); setPatients(users.filter((u) => u.role === "paciente")); closeModal(); }} />
+        <UserRoleModal
+          user={editingItem}
+          onClose={closeModal}
+          onSave={async (rut, role) => {
+            await updateUser(rut, { role });
+            const users = await getUsers();
+            setAllUsers(users);
+            setPatients(users.filter((u) => u.role === "paciente"));
+            closeModal();
+          }}
+        />
       )}
     </div>
   );
@@ -823,6 +834,7 @@ function PatientEditModal({ patient, onClose, onSave }: { patient: User; onClose
 
 function UserRoleModal({ user, onClose, onSave }: { user: User; onClose: () => void; onSave: (rut: string, role: "admin" | "paciente") => void }) {
   const [role, setRole] = useState<"admin" | "paciente">(user.role);
+  
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
