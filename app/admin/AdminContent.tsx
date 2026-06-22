@@ -198,6 +198,7 @@ const handleDeleteAppointment = async (id: string) => {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
       <div className="flex-1 flex">
+        {/* Sidebar — solo visible en md+ */}
         <aside className={`${sidebarOpen ? "w-64" : "w-16"} bg-white border-r border-gray-200 transition-all duration-300 hidden md:flex flex-col`}>
           <div className="p-4 border-b border-gray-100">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
@@ -224,11 +225,28 @@ const handleDeleteAppointment = async (id: string) => {
           </div>
         </aside>
 
-        <main className="flex-1 overflow-auto pb-8">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900">Panel de Administración</h1>
-              <p className="text-gray-600 mt-1">Gestiona pacientes, testimonios, tratamientos y operaciones de la clínica</p>
+        {/* Navegación inferior mobile */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around px-1 py-1 shadow-lg">
+          {sidebarItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors flex-1 ${
+                activeTab === item.id ? "text-primary-600 bg-primary-50" : "text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              <item.icon className="h-5 w-5 flex-shrink-0" />
+              <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Contenido principal */}
+        <main className="flex-1 overflow-auto pb-24 md:pb-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="mb-6">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Panel de Administración</h1>
+              <p className="text-gray-600 mt-1 text-sm md:text-base">Gestiona pacientes, testimonios, tratamientos y operaciones de la clínica</p>
             </div>
 
             {activeTab === "dashboard" && (
@@ -306,15 +324,56 @@ const handleDeleteAppointment = async (id: string) => {
 
             {activeTab === "citas" && (
               <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div className="px-4 md:px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><CalendarCheck className="h-5 w-5 text-primary-600" /> Citas Agendadas</h2>
-                  <div className="relative">
+                  <div className="relative w-full sm:w-auto">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input type="text" placeholder="Buscar cita..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-9 pr-4 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                      className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+
+                {/* Vista móvil: tarjetas */}
+                <div className="md:hidden divide-y divide-gray-100">
+                  {filteredAppointments.map((a) => (
+                    <div key={a.id} className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-gray-900">{a.patientName}</p>
+                          <p className="text-xs text-gray-500">{a.patientRut}</p>
+                        </div>
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border flex-shrink-0 ${
+                          a.status === "Confirmada" ? "bg-green-50 text-green-700 border-green-200" :
+                          a.status === "Pendiente" ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
+                          a.status === "Cancelada" ? "bg-red-50 text-red-700 border-red-200" :
+                          "bg-blue-50 text-blue-700 border-blue-200"
+                        }`}>{a.status}</span>
+                      </div>
+                      <div className="text-sm text-gray-600 grid grid-cols-2 gap-1">
+                        <span><span className="font-medium">Fecha:</span> {a.date}</span>
+                        <span><span className="font-medium">Hora:</span> {a.time} hrs</span>
+                        <span><span className="font-medium">Dentista:</span> {a.dentist}</span>
+                        <span><span className="font-medium">Motivo:</span> {a.treatment}</span>
+                      </div>
+                      {a.notes && <p className="text-xs text-gray-500 truncate">Notas: {a.notes}</p>}
+                      <div className="flex items-center gap-2 pt-1">
+                        {a.status === "Pendiente" && (
+                          <button onClick={() => handleConfirmAppointment(a.id)} className="flex items-center gap-1 px-2 py-1 text-xs text-green-700 bg-green-50 rounded-lg border border-green-200"><CheckCircle2 className="h-3 w-3" /> Confirmar</button>
+                        )}
+                        {(a.status === "Pendiente" || a.status === "Confirmada") && (
+                          <button onClick={() => handleCompleteAppointment(a.id)} className="flex items-center gap-1 px-2 py-1 text-xs text-blue-700 bg-blue-50 rounded-lg border border-blue-200"><CheckCircle2 className="h-3 w-3" /> Completar</button>
+                        )}
+                        {(a.status === "Pendiente" || a.status === "Confirmada") && (
+                          <button onClick={() => handleCancelAppointment(a.id)} className="flex items-center gap-1 px-2 py-1 text-xs text-red-700 bg-red-50 rounded-lg border border-red-200"><CalendarX className="h-3 w-3" /> Cancelar</button>
+                        )}
+                        <button onClick={() => handleDeleteAppointment(a.id)} className="ml-auto p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Vista escritorio: tabla */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
@@ -384,7 +443,30 @@ const handleDeleteAppointment = async (id: string) => {
                       className="pl-9 pr-4 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                {/* Vista móvil: tarjetas */}
+                <div className="md:hidden divide-y divide-gray-100">
+                  {filteredPatients.map((p) => (
+                    <div key={p.id} className="p-4 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-gray-900">{p.name}</p>
+                          <p className="text-xs text-gray-500">{p.rut}</p>
+                        </div>
+                        <button onClick={() => openModal("patient", p)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg flex-shrink-0"><Edit3 className="h-4 w-4" /></button>
+                      </div>
+                      <div className="text-sm text-gray-600 grid grid-cols-2 gap-1">
+                        <span><span className="font-medium">Teléfono:</span> {p.phone || "-"}</span>
+                        <span><span className="font-medium">Edad:</span> {p.birthDate ? `${calculateAge(p.birthDate)} años` : "-"}</span>
+                        <span className="col-span-2 truncate"><span className="font-medium">Email:</span> {p.email}</span>
+                        <span className="col-span-2 truncate"><span className="font-medium">Enfermedades:</span> {p.diseases || "Ninguna"}</span>
+                        <span className="col-span-2 truncate"><span className="font-medium">Alergias:</span> {p.allergies || "Ninguna"}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Vista escritorio: tabla */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
@@ -442,7 +524,32 @@ const handleDeleteAppointment = async (id: string) => {
                     </button>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                {/* Vista móvil: tarjetas */}
+                <div className="md:hidden divide-y divide-gray-100">
+                  {filteredTestimonials.map((t) => (
+                    <div key={t.id} className="p-4 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-gray-900">{t.name}</p>
+                          <p className="text-xs text-gray-500">{t.role}</p>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button onClick={() => openModal("testimonial", t)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit3 className="h-4 w-4" /></button>
+                          <button onClick={() => handleDeleteTestimonial(t.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+                      <div className="flex gap-0.5">
+                        {Array.from({ length: t.rating }).map((_, i) => (
+                          <Star key={i} className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
+                        ))}
+                      </div>
+                      <p className="text-sm text-gray-600 line-clamp-2">{t.text}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Vista escritorio: tabla */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
@@ -497,7 +604,37 @@ const handleDeleteAppointment = async (id: string) => {
                     </button>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                {/* Vista móvil: tarjetas */}
+                <div className="md:hidden divide-y divide-gray-100">
+                  {filteredTreatments.map((t) => (
+                    <div key={t.id} className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-gray-900">{t.procedure}</p>
+                          <p className="text-xs text-gray-500">{t.patientRut}</p>
+                        </div>
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border flex-shrink-0 ${
+                          t.status === "Completado" ? "bg-green-50 text-green-700 border-green-200" :
+                          t.status === "En Progreso" ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
+                          "bg-gray-50 text-gray-600 border-gray-200"
+                        }`}>{t.status}</span>
+                      </div>
+                      <div className="text-sm text-gray-600 grid grid-cols-2 gap-1">
+                        <span><span className="font-medium">Fase:</span> {t.phase}</span>
+                        <span><span className="font-medium">Fecha:</span> {t.date}</span>
+                        <span><span className="font-medium">Dentista:</span> {t.dentist}</span>
+                        <span><span className="font-medium">Costo:</span> {t.cost}</span>
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button onClick={() => openModal("treatment", t)} className="flex items-center gap-1 px-3 py-1.5 text-xs text-blue-700 bg-blue-50 rounded-lg border border-blue-200"><Edit3 className="h-3 w-3" /> Editar</button>
+                        <button onClick={() => handleDeleteTreatment(t.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs text-red-700 bg-red-50 rounded-lg border border-red-200"><Trash2 className="h-3 w-3" /> Eliminar</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Vista escritorio: tabla */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
@@ -555,7 +692,30 @@ const handleDeleteAppointment = async (id: string) => {
                       className="pl-9 pr-4 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                {/* Vista móvil: tarjetas */}
+                <div className="md:hidden divide-y divide-gray-100">
+                  {filteredUsers.map((u) => (
+                    <div key={u.id} className="p-4 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-gray-900">{u.name}</p>
+                          <p className="text-xs text-gray-500">{u.rut}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
+                            u.role === "admin" ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                          }`}>{u.role === "admin" ? "Admin" : "Paciente"}</span>
+                          <button onClick={() => openModal("user", u)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit3 className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-500 truncate">{u.email}</p>
+                      <p className="text-xs text-gray-400">Registrado: {new Date(u.createdAt).toLocaleDateString("es-CL")}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Vista escritorio: tabla */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
@@ -623,6 +783,22 @@ const handleDeleteAppointment = async (id: string) => {
           }}
         />
       )}
+
+      {/* Barra de navegación inferior — solo visible en móvil */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex md:hidden">
+        {sidebarItems.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setActiveTab(item.id)}
+            className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-xs font-medium transition-colors ${
+              activeTab === item.id ? "text-primary-600" : "text-gray-500"
+            }`}
+          >
+            <item.icon className={`h-5 w-5 ${activeTab === item.id ? "text-primary-600" : "text-gray-400"}`} />
+            <span className="truncate w-full text-center px-0.5" style={{ fontSize: "9px" }}>{item.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }

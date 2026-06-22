@@ -10,10 +10,29 @@ export default function Footer() {
             <Smile className="h-5 w-5 text-primary-400" />
             <span className="font-semibold">ByDraSolano</span>
           </div>
-          <div className="flex items-center gap-6 text-sm text-gray-400">
-            <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Agustinas 853 Santiago, Chile</span>
-            <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> +569 76178090</span>
-            <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> contacto@clinicadental.cl</span>
+          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6 text-sm text-gray-400">
+            <a
+              href="https://maps.google.com/?q=Agustinas+853+Santiago+Chile"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 hover:text-primary-400 transition-colors"
+            >
+              <MapPin className="h-3.5 w-3.5 flex-shrink-0" /> Agustinas 853, Santiago
+            </a>
+            <a
+              href="https://wa.me/56976178090"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 hover:text-green-400 transition-colors"
+            >
+              <Phone className="h-3.5 w-3.5 flex-shrink-0" /> +569 76178090
+            </a>
+            <a
+              href="mailto:contacto@clinicadental.cl"
+              className="flex items-center gap-1 hover:text-primary-400 transition-colors"
+            >
+              <Mail className="h-3.5 w-3.5 flex-shrink-0" /> contacto@clinicadental.cl
+            </a>
           </div>
           <div className="flex items-center gap-4 text-sm text-gray-400">
             <Link href="/" className="hover:text-primary-400 transition-colors">Inicio</Link>
