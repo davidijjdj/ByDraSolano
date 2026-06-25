@@ -28,7 +28,7 @@ export default function Footer() {
               <Phone className="h-3.5 w-3.5 flex-shrink-0" /> +569 76178090
             </a>
             <a
-              href="mailto:contacto@clinicadental.cl"
+              href="mailto:contactobydrasolano@gmail.com"
               className="flex items-center gap-1 hover:text-primary-400 transition-colors"
             >
               <Mail className="h-3.5 w-3.5 flex-shrink-0" /> contacto@clinicadental.cl
