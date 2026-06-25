@@ -31,7 +31,7 @@ export default function Footer() {
               href="mailto:contactobydrasolano@gmail.com"
               className="flex items-center gap-1 hover:text-primary-400 transition-colors"
             >
-              <Mail className="h-3.5 w-3.5 flex-shrink-0" /> contacto@clinicadental.cl
+              <Mail className="h-3.5 w-3.5 flex-shrink-0" /> contactobydrasolano@gmail.com
             </a>
           </div>
           <div className="flex items-center gap-4 text-sm text-gray-400">

@@ -9,7 +9,7 @@ import { getTestimonials, Testimonial } from "@/lib/auth";
 
 const features = [
   { icon: Shield, title: "Tecnología Avanzada", description: "Equipos de última generación para diagnósticos precisos y tratamientos eficaces." },
-  { icon: Clock, title: "Horarios Flexibles", description: "Atención de personalizada que se adaptan a tu rutina." },
+  { icon: Clock, title: "Horarios Flexibles", description: "Atención personalizada que se adaptan a tu rutina." },
   { icon: Award, title: "Especialistas Certificados", description: "Nuestro equipo cuenta con certificaciones actualizadas en odontología." },
 ];
 
