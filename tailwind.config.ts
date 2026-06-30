@@ -8,9 +8,13 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-open-sans)", "ui-sans-serif", "system-ui"],
+        heading: ["var(--font-poppins)", "ui-sans-serif", "system-ui"],
+      },
       colors: {
         primary: {
-          50: "#eff6ff",
+          50:  "#eff6ff",
           100: "#dbeafe",
           200: "#bfdbfe",
           300: "#93c5fd",
@@ -21,6 +25,14 @@ const config: Config = {
           800: "#1e40af",
           900: "#1e3a8a",
         },
+        // Color de acción para CTAs principales (Agendar cita)
+        cta: {
+          500: "#f97316",
+          600: "#ea6c0a",
+          700: "#c2540a",
+        },
+        // Fondo general de la app
+        surface: "#F8FAFC",
       },
     },
   },

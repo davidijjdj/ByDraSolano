@@ -1,20 +1,29 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Poppins, Open_Sans } from "next/font/google";
 import { AuthProvider } from "@/lib/auth-context";
-// @ts-ignore
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-poppins",
+});
+
+const openSans = Open_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-open-sans",
+});
 
 export const metadata: Metadata = {
-  title: "Clínica Dental - Sonrisas Perfectas",
+  title: "ByDraSolano - Clínica Dental",
   description: "Tu salud dental es nuestra prioridad. Agenda tu cita hoy.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="es" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${openSans.variable} ${poppins.variable} font-sans`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
