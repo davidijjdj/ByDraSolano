@@ -60,8 +60,8 @@ export interface Appointment {
 
 export interface AgendaConfig {
   enabled: boolean;
-  disabledDates: string[];
-  disabledReason: string;
+  enabledDates: string[];
+  closedReason: string;
   workHours: { start: string; end: string };
 }
 
@@ -443,8 +443,8 @@ export async function deleteAppointment(id: string): Promise<void> {
 
 const DEFAULT_AGENDA: AgendaConfig = {
   enabled: true,
-  disabledDates: [],
-  disabledReason: "",
+  enabledDates: [],
+  closedReason: "",
   workHours: { start: "09:00", end: "18:00" },
 };
 
@@ -453,8 +453,8 @@ export async function getAgendaConfig(): Promise<AgendaConfig> {
   if (error || !data) return DEFAULT_AGENDA;
   return {
     enabled: data.enabled,
-    disabledDates: data.disabled_dates ?? [],
-    disabledReason: data.disabled_reason ?? "",
+    enabledDates: data.enabled_dates ?? [],
+    closedReason: data.closed_reason ?? "",
     workHours: data.work_hours ?? DEFAULT_AGENDA.workHours,
   };
 }
@@ -464,8 +464,8 @@ export async function saveAgendaConfig(config: AgendaConfig): Promise<void> {
     .from("agenda_config")
     .update({
       enabled: config.enabled,
-      disabled_dates: config.disabledDates,
-      disabled_reason: config.disabledReason,
+      enabled_dates: config.enabledDates,
+      closed_reason: config.closedReason,
       work_hours: config.workHours,
     })
     .eq("id", 1);

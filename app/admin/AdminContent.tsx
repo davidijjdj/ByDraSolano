@@ -41,7 +41,7 @@ function AdminInner() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [agenda, setAgenda] = useState<AgendaConfig>({ enabled: true, disabledDates: [], disabledReason: "", workHours: { start: "09:00", end: "18:00" } });
+  const [agenda, setAgenda] = useState<AgendaConfig>({ enabled: true, enabledDates: [], closedReason: "", workHours: { start: "09:00", end: "18:00" } });
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"" | "testimonial" | "treatment" | "patient" | "agenda" | "user">("");
@@ -267,7 +267,7 @@ const handleDeleteAppointment = async (id: string) => {
                     {agenda.enabled ? <CheckCircle2 className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
                     <span className="font-medium">{agenda.enabled ? "Clínica abierta para citas" : "Clínica cerrada para citas"}</span>
                   </div>
-                  {agenda.disabledReason && <p className="mt-2 text-sm text-red-600">{agenda.disabledReason}</p>}
+                  {agenda.closedReason && <p className="mt-2 text-sm text-red-600">{agenda.closedReason}</p>}
                   <p className="mt-3 text-sm text-gray-500">Horario: {agenda.workHours.start} - {agenda.workHours.end}</p>
                 </div>
               </>
@@ -300,20 +300,20 @@ const handleDeleteAppointment = async (id: string) => {
                       <p className="text-2xl font-bold text-primary-600 mt-1">{agenda.workHours.end}</p>
                     </div>
                   </div>
-                  {agenda.disabledReason && (
+                  {agenda.closedReason && (
                     <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                       <p className="font-medium text-red-800">Motivo de cierre:</p>
-                      <p className="text-red-700 mt-1">{agenda.disabledReason}</p>
+                      <p className="text-red-700 mt-1">{agenda.closedReason}</p>
                     </div>
                   )}
                   <div className="p-4 bg-gray-50 rounded-lg">
-                    <p className="font-medium text-gray-900 mb-2">Fechas Deshabilitadas</p>
-                    {agenda.disabledDates.length === 0 ? (
-                      <p className="text-sm text-gray-500">No hay fechas deshabilitadas</p>
+                    <p className="font-medium text-gray-900 mb-2">Fechas Habilitadas</p>
+                    {agenda.enabledDates.length === 0 ? (
+                      <p className="text-sm text-gray-500">No hay fechas habilitadas. Los pacientes no podrán agendar hasta que habilites al menos una fecha.</p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
-                        {agenda.disabledDates.map((d, i) => (
-                          <span key={i} className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">{d}</span>
+                        {agenda.enabledDates.map((d, i) => (
+                          <span key={i} className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">{d}</span>
                         ))}
                       </div>
                     )}
@@ -891,21 +891,21 @@ function TreatmentModal({ item, patients, onClose, onSave }: { item: Treatment |
 function AgendaModal({ config, onClose, onSave }: { config: AgendaConfig; onClose: () => void; onSave: (c: AgendaConfig) => void }) {
   const [form, setForm] = useState<AgendaConfig>({
     enabled: config?.enabled ?? true,
-    disabledDates: config?.disabledDates ? [...config.disabledDates] : [],
-    disabledReason: config?.disabledReason || "",
+    enabledDates: config?.enabledDates ? [...config.enabledDates] : [],
+    closedReason: config?.closedReason || "",
     workHours: { start: config?.workHours?.start || "09:00", end: config?.workHours?.end || "18:00" },
   });
   const [newDate, setNewDate] = useState("");
 
   const addDate = () => {
-    if (newDate && !form.disabledDates.includes(newDate)) {
-      setForm({ ...form, disabledDates: [...form.disabledDates, newDate] });
+    if (newDate && !form.enabledDates.includes(newDate)) {
+      setForm({ ...form, enabledDates: [...form.enabledDates, newDate].sort() });
       setNewDate("");
     }
   };
 
   const removeDate = (d: string) => {
-    setForm({ ...form, disabledDates: form.disabledDates.filter((x) => x !== d) });
+    setForm({ ...form, enabledDates: form.enabledDates.filter((x) => x !== d) });
   };
 
   return (
@@ -916,37 +916,62 @@ function AgendaModal({ config, onClose, onSave }: { config: AgendaConfig; onClos
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg"><X className="h-5 w-5 text-gray-500" /></button>
         </div>
         <div className="p-6 space-y-5">
+
+          {/* Toggle global de agenda */}
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div><p className="font-medium text-gray-900">Agenda Abierta</p><p className="text-sm text-gray-500">Permite que los pacientes vean citas disponibles</p></div>
+            <div>
+              <p className="font-medium text-gray-900">Agenda Abierta</p>
+              <p className="text-sm text-gray-500">Activa para que los pacientes puedan agendar</p>
+            </div>
             <button onClick={() => setForm({ ...form, enabled: !form.enabled })}
               className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${form.enabled ? "bg-primary-600" : "bg-gray-300"}`}>
               <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${form.enabled ? "translate-x-6" : "translate-x-1"}`} />
             </button>
           </div>
+
+          {/* Motivo de cierre (solo si está cerrada) */}
           {!form.enabled && (
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Motivo de cierre</label>
-              <textarea value={form.disabledReason} onChange={(e) => setForm({ ...form, disabledReason: e.target.value })} rows={2} placeholder="Ej: Cierre por feriado, mantenimiento..."
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Motivo de cierre (opcional)</label>
+              <textarea value={form.closedReason} onChange={(e) => setForm({ ...form, closedReason: e.target.value })} rows={2}
+                placeholder="Ej: Cierre por feriado, vacaciones..."
                 className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none" />
             </div>
           )}
+
+          {/* Horario */}
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Hora Apertura</label><input type="time" value={form.workHours.start} onChange={(e) => setForm({ ...form, workHours: { ...form.workHours, start: e.target.value } })} className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500" /></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Hora Cierre</label><input type="time" value={form.workHours.end} onChange={(e) => setForm({ ...form, workHours: { ...form.workHours, end: e.target.value } })} className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500" /></div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Hora apertura</label>
+              <input type="time" value={form.workHours.start} onChange={(e) => setForm({ ...form, workHours: { ...form.workHours, start: e.target.value } })}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Hora cierre</label>
+              <input type="time" value={form.workHours.end} onChange={(e) => setForm({ ...form, workHours: { ...form.workHours, end: e.target.value } })}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500" />
+            </div>
           </div>
+
+          {/* Fechas habilitadas */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Fechas Deshabilitadas</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fechas habilitadas para citas</label>
+            <p className="text-xs text-gray-400 mb-3">Solo los días que agregues aquí estarán disponibles para los pacientes.</p>
             <div className="flex gap-2 mb-3">
-              <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="flex-1 px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500" />
+              <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)}
+                className="flex-1 px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500" />
               <button onClick={addDate} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">Agregar</button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {form.disabledDates.map((d) => (
-                <span key={d} className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">
-                  {d}
-                  <button onClick={() => removeDate(d)} className="hover:text-red-900"><X className="h-3 w-3" /></button>
-                </span>
-              ))}
-              {form.disabledDates.length === 0 && <p className="text-sm text-gray-400">No hay fechas deshabilitadas</p>}
+            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+              {form.enabledDates.length === 0
+                ? <p className="text-sm text-gray-400">Ninguna fecha habilitada — los pacientes no podrán agendar.</p>
+                : form.enabledDates.map((d) => (
+                  <span key={d} className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
+                    {d}
+                    <button onClick={() => removeDate(d)} className="hover:text-green-900 ml-0.5"><X className="h-3 w-3" /></button>
+                  </span>
+                ))
+              }
             </div>
           </div>
         </div>

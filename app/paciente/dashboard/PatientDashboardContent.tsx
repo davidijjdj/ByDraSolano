@@ -103,7 +103,7 @@ function PatientDashboardInner() {
     setBookingSuccess(false);
     if (!bookingForm.date) { setBookingError("Selecciona una fecha"); return; }
     if (!bookingForm.time) { setBookingError("Selecciona una hora"); return; }
-    if (agenda.disabledDates.includes(bookingForm.date)) { setBookingError("Esta fecha no está disponible"); return; }
+    if (!agenda.enabledDates.includes(bookingForm.date)) { setBookingError("Esta fecha no está habilitada por la clínica"); return; }
     const allAppts = await getAppointments();
     const isBooked = allAppts.some(
       a => a.date === bookingForm.date && a.time === bookingForm.time &&
@@ -297,7 +297,7 @@ function PatientDashboardInner() {
               <p className={`font-medium text-sm ${agenda?.enabled ? "text-green-800" : "text-red-800"}`}>
                 {agenda?.enabled ? "La clínica está recibiendo citas" : "La clínica no está recibiendo citas en este momento"}
               </p>
-              {agenda?.disabledReason && <p className="text-xs text-red-600 mt-0.5">{agenda.disabledReason}</p>}
+              {agenda?.closedReason && <p className="text-xs text-red-600 mt-0.5">{agenda.closedReason}</p>}
             </div>
           </div>
 
@@ -325,17 +325,32 @@ function PatientDashboardInner() {
                 {bookingSuccess && <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> ¡Cita agendada exitosamente!</div>}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
-                    <input type="date" min={today} value={bookingForm.date} onChange={(e) => setBookingForm({ ...bookingForm, date: e.target.value, time: "" })} className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500" />
-                    {bookingForm.date && agenda.disabledDates.includes(bookingForm.date) && <p className="text-xs text-red-600 mt-1">Fecha no disponible</p>}
-                  </div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
+                      <select
+                        value={bookingForm.date}
+                        onChange={(e) => setBookingForm({ ...bookingForm, date: e.target.value, time: "" })}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      >
+                        <option value="">Selecciona una fecha</option>
+                        {agenda.enabledDates
+                          .filter((d) => d >= today)
+                          .sort()
+                          .map((d) => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                      </select>
+                      {agenda.enabledDates.filter((d) => d >= today).length === 0 && (
+                        <p className="text-xs text-red-600 mt-1">No hay fechas disponibles en este momento</p>
+                      )}
+                    </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Hora</label>
-                    <select value={bookingForm.time} onChange={(e) => setBookingForm({ ...bookingForm, time: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500" disabled={!bookingForm.date || agenda.disabledDates.includes(bookingForm.date)}>
+                    <select value={bookingForm.time} onChange={(e) => setBookingForm({ ...bookingForm, time: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500" disabled={!bookingForm.date || !agenda.enabledDates.includes(bookingForm.date)}>
                       <option value="">Seleccionar hora</option>
                       {availableSlots.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-                    {bookingForm.date && availableSlots.length === 0 && !agenda.disabledDates.includes(bookingForm.date) && <p className="text-xs text-red-600 mt-1">No hay horarios disponibles</p>}
+                    {bookingForm.date && availableSlots.length === 0 && !agenda.enabledDates.includes(bookingForm.date) && <p className="text-xs text-red-600 mt-1">No hay horarios disponibles</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Dentista</label>
