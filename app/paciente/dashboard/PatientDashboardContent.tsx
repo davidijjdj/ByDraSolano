@@ -135,7 +135,8 @@ function PatientDashboardInner() {
   const total = treatments.length;
   const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
   const age = user?.birthDate ? calculateAge(user.birthDate) : null;
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
+    .toISOString().split("T")[0];
   const bookedTimesForDate = appointments
     .filter(a => a.date === bookingForm.date && a.status !== "Cancelada")
     .map(a => a.time);
