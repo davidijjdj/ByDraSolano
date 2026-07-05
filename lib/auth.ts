@@ -32,6 +32,7 @@ export interface Testimonial {
   role: string;
   rating: number;
   text: string;
+  imageUrl?: string;
 }
 
 export interface Treatment {
@@ -43,6 +44,7 @@ export interface Treatment {
   date: string;
   cost: string;
   dentist: string;
+  paid: boolean;
 }
 
 export interface Appointment {
@@ -285,7 +287,7 @@ export async function updateUser(rut: string, updates: Partial<User>): Promise<v
 // ============================================================
 
 function rowToTestimonial(row: any): Testimonial {
-  return { id: row.id, name: row.name, role: row.role, rating: row.rating, text: row.text };
+  return { id: row.id, name: row.name, role: row.role, rating: row.rating, text: row.text, imageUrl: row.image_url ?? undefined };
 }
 
 export async function getTestimonials(): Promise<Testimonial[]> {
@@ -297,7 +299,7 @@ export async function getTestimonials(): Promise<Testimonial[]> {
 export async function addTestimonial(t: Omit<Testimonial, "id">): Promise<Testimonial> {
   const { data, error } = await supabase
     .from("testimonials")
-    .insert({ name: t.name, role: t.role, rating: t.rating, text: t.text })
+    .insert({ name: t.name, role: t.role, rating: t.rating, text: t.text, image_url: t.imageUrl ?? null })
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -305,7 +307,13 @@ export async function addTestimonial(t: Omit<Testimonial, "id">): Promise<Testim
 }
 
 export async function updateTestimonial(id: string, t: Partial<Testimonial>): Promise<void> {
-  const { error } = await supabase.from("testimonials").update(t).eq("id", id);
+  const payload: Record<string, any> = {};
+  if (t.name !== undefined) payload.name = t.name;
+  if (t.role !== undefined) payload.role = t.role;
+  if (t.rating !== undefined) payload.rating = t.rating;
+  if (t.text !== undefined) payload.text = t.text;
+  if (t.imageUrl !== undefined) payload.image_url = t.imageUrl;
+  const { error } = await supabase.from("testimonials").update(payload).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
@@ -328,6 +336,7 @@ function rowToTreatment(row: any): Treatment {
     date: row.date,
     cost: row.cost,
     dentist: row.dentist,
+    paid: row.paid ?? false,
   };
 }
 
@@ -340,6 +349,9 @@ export async function getTreatments(patientRut?: string): Promise<Treatment[]> {
 }
 
 export async function addTreatment(t: Omit<Treatment, "id">): Promise<Treatment> {
+  if (!t.patientRut) {
+    throw new Error("Debes seleccionar un paciente antes de guardar el tratamiento");
+  }
   const { data, error } = await supabase
     .from("treatments")
     .insert({
@@ -350,10 +362,16 @@ export async function addTreatment(t: Omit<Treatment, "id">): Promise<Treatment>
       date: t.date,
       cost: t.cost,
       dentist: t.dentist,
+      paid: t.paid ?? false,
     })
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.message.includes("foreign key")) {
+      throw new Error("El RUT del paciente no existe en el sistema. Verifica que esté registrado.");
+    }
+    throw new Error(error.message);
+  }
   return rowToTreatment(data);
 }
 
@@ -365,6 +383,7 @@ export async function updateTreatment(id: string, t: Partial<Treatment>): Promis
   if (t.date !== undefined) payload.date = t.date;
   if (t.cost !== undefined) payload.cost = t.cost;
   if (t.dentist !== undefined) payload.dentist = t.dentist;
+  if (t.paid !== undefined) payload.paid = t.paid;
   const { error } = await supabase.from("treatments").update(payload).eq("id", id);
   if (error) throw new Error(error.message);
 }
