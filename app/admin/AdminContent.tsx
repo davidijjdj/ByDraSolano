@@ -1057,8 +1057,8 @@ function PatientEditModal({ patient, onClose, onSave }: { patient: User; onClose
   );
 }
 
-function UserRoleModal({ user, onClose, onSave }: { user: User; onClose: () => void; onSave: (rut: string, role: "admin" | "paciente") => void }) {
-  const [role, setRole] = useState<"admin" | "paciente">(user.role);
+function UserRoleModal({ user, onClose, onSave }: { user: User; onClose: () => void; onSave: (rut: string, role: "admin" | "paciente" | "doctor") => void }) {
+  const [role, setRole] = useState<"admin" | "paciente" | "doctor">(user.role);
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -1075,14 +1075,17 @@ function UserRoleModal({ user, onClose, onSave }: { user: User; onClose: () => v
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Rol / Permisos</label>
-            <select value={role} onChange={(e) => setRole(e.target.value as "admin" | "paciente")}
+            <select value={role} onChange={(e) => setRole(e.target.value as "admin" | "paciente" | "doctor")}
               className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500">
-              <option value="paciente">Paciente (solo puede ver su panel)</option>
-              <option value="admin">Administrador (acceso total al panel de admin)</option>
+              <option value="paciente">Paciente — solo puede ver su panel</option>
+              <option value="doctor">Doctor — gestiona pacientes asignados y tratamientos</option>
+              <option value="admin">Administrador — acceso total al panel de admin</option>
             </select>
             <p className="text-xs text-gray-500 mt-2">
               {role === "admin"
                 ? "Este usuario podrá gestionar pacientes, testimonios, tratamientos y la agenda."
+                : role === "doctor"
+                ? "Este usuario verá sus pacientes asignados y podrá crear y editar sus tratamientos."
                 : "Este usuario solo podrá ver su propio plan de tratamiento y editar sus datos personales."}
             </p>
           </div>
