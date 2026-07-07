@@ -17,7 +17,7 @@ const features = [
 
 const stats = [
   { icon: Users, value: "+2.400", label: "Pacientes atendidos" },
-  { icon: CalendarCheck, value: "12 años", label: "De experiencia" },
+  { icon: CalendarCheck, value: "11 años", label: "De experiencia" },
   { icon: ThumbsUp, value: "4.9 ★", label: "Satisfacción promedio" },
 ];
 

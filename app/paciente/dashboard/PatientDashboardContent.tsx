@@ -7,8 +7,8 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/lib/auth-context";
 import {
   getTreatments, getAgendaConfig, getAppointments, addAppointment,
-  updateAppointment, updateUser, calculateAge,
-  Treatment, AgendaConfig, Appointment
+  updateAppointment, updateUser, calculateAge, getPatientDoctor,
+  Treatment, AgendaConfig, Appointment, User as UserType
 } from "@/lib/auth";
 import {
   User, Calendar, ClipboardList, CreditCard, CheckCircle2, Clock, AlertCircle,
@@ -52,6 +52,7 @@ function PatientDashboardInner() {
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [agenda, setAgenda] = useState<AgendaConfig | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [assignedDoctor, setAssignedDoctor] = useState<UserType | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -74,6 +75,11 @@ function PatientDashboardInner() {
       setTreatments(await getTreatments(user.rut));
       setAgenda(await getAgendaConfig());
       setAppointments(await getAppointments(user.rut));
+      const doctor = await getPatientDoctor(user.rut);
+      setAssignedDoctor(doctor);
+      if (doctor) {
+        setBookingForm(prev => ({ ...prev, dentist: doctor.name }));
+      }
       setProfileForm({
         birthDate: user.birthDate || "",
         diseases: user.diseases || "",
@@ -120,7 +126,7 @@ function PatientDashboardInner() {
     setAppointments(await getAppointments(user.rut));
     setSavingBooking(false);
     setBookingSuccess(true);
-    setBookingForm({ date: "", time: "", dentist: DENTISTS[0], treatment: TREATMENT_TYPES[0], notes: "" });
+    setBookingForm({ date: "", time: "", dentist: assignedDoctor?.name || "", treatment: TREATMENT_TYPES[0], notes: "" });
     setTimeout(() => setBookingSuccess(false), 3000);
   };
 
@@ -135,8 +141,7 @@ function PatientDashboardInner() {
   const total = treatments.length;
   const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
   const age = user?.birthDate ? calculateAge(user.birthDate) : null;
-  const today = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
-    .toISOString().split("T")[0];
+  const today = new Date().toISOString().split("T")[0];
   const bookedTimesForDate = appointments
     .filter(a => a.date === bookingForm.date && a.status !== "Cancelada")
     .map(a => a.time);
@@ -354,10 +359,24 @@ function PatientDashboardInner() {
                     {bookingForm.date && availableSlots.length === 0 && !agenda.enabledDates.includes(bookingForm.date) && <p className="text-xs text-red-600 mt-1">No hay horarios disponibles</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Dentista</label>
-                    <select value={bookingForm.dentist} onChange={(e) => setBookingForm({ ...bookingForm, dentist: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                      {DENTISTS.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Doctora a cargo</label>
+                    {assignedDoctor ? (
+                      <div className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                          {assignedDoctor.name.split(" ").slice(0, 2).map((n: string) => n[0]).join("")}
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-900">{assignedDoctor.name}</span>
+                          {assignedDoctor.specialty && (
+                            <span className="text-xs text-primary-600 ml-2">{assignedDoctor.specialty}</span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-full px-3 py-2 rounded-lg border border-yellow-200 bg-yellow-50 text-sm text-yellow-700">
+                        No tienes un doctor asignado aún. Contacta a la clínica.
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Motivo</label>
@@ -373,7 +392,7 @@ function PatientDashboardInner() {
                 <div className="mt-4">
                   <button
                     onClick={handleBookAppointment}
-                    disabled={savingBooking}
+                    disabled={savingBooking || !assignedDoctor}
                     className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
                   >
                     {savingBooking ? <><Loader2 className="h-4 w-4 animate-spin" /> Agendando...</> : <><CalendarPlus className="h-4 w-4" /> Confirmar cita</>}

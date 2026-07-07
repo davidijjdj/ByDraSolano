@@ -17,6 +17,7 @@ export interface User {
   diseases?: string;
   allergies?: string;
   phone?: string;
+  specialty?: string;
   createdAt: string;
 }
 
@@ -146,6 +147,7 @@ function rowToUser(row: any): User {
     diseases: row.diseases ?? undefined,
     allergies: row.allergies ?? undefined,
     phone: row.phone ?? undefined,
+    specialty: row.specialty ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -286,6 +288,7 @@ export async function updateUser(rut: string, updates: Partial<User>): Promise<v
   if (updates.diseases !== undefined) payload.diseases = updates.diseases;
   if (updates.allergies !== undefined) payload.allergies = updates.allergies;
   if (updates.role !== undefined) payload.role = updates.role;
+  if (updates.specialty !== undefined) payload.specialty = updates.specialty;
 
   const { error } = await supabase.from("profiles").update(payload).eq("rut", rut);
   if (error) throw new Error(error.message);
