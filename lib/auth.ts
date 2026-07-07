@@ -10,7 +10,7 @@ import { supabase } from "./supabase";
 export interface User {
   id: string;
   rut: string;
-  role: "admin" | "paciente";
+  role: "admin" | "paciente" | "doctor";
   name: string;
   email: string;
   birthDate?: string;
@@ -24,6 +24,15 @@ export interface Session {
   user: User;
   token: string;
   expiresAt: number;
+}
+
+export interface PatientAssignment {
+  id: string;
+  patientRut: string;
+  doctorRut: string;
+  assignedAt: string;
+  patientName?: string;
+  doctorName?: string;
 }
 
 export interface Testimonial {
@@ -172,7 +181,7 @@ export async function login(rut: string, password: string): Promise<Session> {
 export async function registerUser(input: {
   rut: string;
   password: string;
-  role: "admin" | "paciente";
+  role: "admin" | "paciente" | "doctor";
   name: string;
   email: string;
   phone?: string;
@@ -489,4 +498,63 @@ export async function saveAgendaConfig(config: AgendaConfig): Promise<void> {
     })
     .eq("id", 1);
   if (error) throw new Error(error.message);
+}
+
+// ============================================================
+// Asignaciones paciente → doctor
+// ============================================================
+
+export async function getAssignments(): Promise<PatientAssignment[]> {
+  const { data, error } = await supabase
+    .from("patient_assignments")
+    .select(`
+      id, patient_rut, doctor_rut, assigned_at,
+      patient:profiles!patient_assignments_patient_rut_fkey(name),
+      doctor:profiles!patient_assignments_doctor_rut_fkey(name)
+    `)
+    .order("assigned_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    patientRut: row.patient_rut,
+    doctorRut: row.doctor_rut,
+    assignedAt: row.assigned_at,
+    patientName: row.patient?.name,
+    doctorName: row.doctor?.name,
+  }));
+}
+
+export async function assignPatientToDoctor(patientRut: string, doctorRut: string): Promise<void> {
+  // upsert: si el paciente ya tiene doctor, lo reemplaza
+  const { error } = await supabase
+    .from("patient_assignments")
+    .upsert({ patient_rut: patientRut, doctor_rut: doctorRut }, { onConflict: "patient_rut" });
+  if (error) throw new Error(error.message);
+}
+
+export async function removeAssignment(patientRut: string): Promise<void> {
+  const { error } = await supabase
+    .from("patient_assignments")
+    .delete()
+    .eq("patient_rut", patientRut);
+  if (error) throw new Error(error.message);
+}
+
+export async function getDoctorPatients(doctorRut: string): Promise<User[]> {
+  const { data, error } = await supabase
+    .from("patient_assignments")
+    .select("patient:profiles!patient_assignments_patient_rut_fkey(*)")
+    .eq("doctor_rut", doctorRut);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row: any) => rowToUser(row.patient));
+}
+
+export async function getPatientDoctor(patientRut: string): Promise<User | null> {
+  const { data, error } = await supabase
+    .from("patient_assignments")
+    .select("doctor:profiles!patient_assignments_doctor_rut_fkey(*)")
+    .eq("patient_rut", patientRut)
+    .single();
+  if (error || !data) return null;
+  return rowToUser((data as any).doctor);
 }

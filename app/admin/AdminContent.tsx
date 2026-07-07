@@ -10,16 +10,18 @@ import {
   addTestimonial, updateTestimonial, deleteTestimonial,
   addTreatment, updateTreatment, deleteTreatment,
   updateAppointment, deleteAppointment,
-  updateUser, calculateAge, saveAgendaConfig, Testimonial, Treatment, AgendaConfig, User, Appointment
+  updateUser, calculateAge, saveAgendaConfig,
+  getAssignments, assignPatientToDoctor, removeAssignment,
+  Testimonial, Treatment, AgendaConfig, User, Appointment, PatientAssignment
 } from "@/lib/auth";
 import {
   LayoutDashboard, CalendarDays, Users, MessageSquare, ClipboardList,
   Settings, Search, Plus, Edit3, Trash2, Save, X, CheckCircle2, Clock,
   AlertCircle, Star, ToggleLeft, ToggleRight, Sun, Moon,
-  Cake, Stethoscope, Pill, CalendarCheck, CalendarX
+  Cake, Stethoscope, Pill, CalendarCheck, CalendarX, UserCheck, UserX
 } from "lucide-react";
 
-type Tab = "dashboard" | "agenda" | "citas" | "pacientes" | "testimonios" | "tratamientos" | "usuarios";
+type Tab = "dashboard" | "agenda" | "citas" | "pacientes" | "testimonios" | "tratamientos" | "usuarios" | "doctores";
 
 export default function AdminContent() {
   return (
@@ -38,6 +40,7 @@ function AdminInner() {
 
   const [patients, setPatients] = useState<User[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [assignments, setAssignments] = useState<PatientAssignment[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -52,12 +55,13 @@ function AdminInner() {
   }, []);
 
 const loadAllData = async () => {
-  const [users, testimonialsData, treatmentsData, agendaData, appointmentsData] = await Promise.all([
+  const [users, testimonialsData, treatmentsData, agendaData, appointmentsData, assignmentsData] = await Promise.all([
     getUsers(),
     getTestimonials(),
     getTreatments(),
     getAgendaConfig(),
     getAppointments(),
+    getAssignments(),
   ]);
   setAllUsers(users);
   setPatients(users.filter((u) => u.role === "paciente"));
@@ -65,6 +69,7 @@ const loadAllData = async () => {
   setTreatments(treatmentsData);
   setAgenda(agendaData);
   setAppointments(appointmentsData);
+  setAssignments(assignmentsData);
 };
 
   const sidebarItems = [
@@ -72,6 +77,7 @@ const loadAllData = async () => {
     { id: "agenda" as Tab, label: "Agenda", icon: CalendarDays },
     { id: "citas" as Tab, label: "Citas", icon: CalendarCheck },
     { id: "pacientes" as Tab, label: "Pacientes", icon: Users },
+    { id: "doctores" as Tab, label: "Doctores", icon: Stethoscope },
     { id: "testimonios" as Tab, label: "Testimonios", icon: MessageSquare },
     { id: "tratamientos" as Tab, label: "Tratamientos", icon: ClipboardList },
     { id: "usuarios" as Tab, label: "Usuarios", icon: Users },
@@ -505,6 +511,24 @@ const handleDeleteAppointment = async (id: string) => {
                   </table>
                 </div>
                 {filteredPatients.length === 0 && <div className="text-center py-12 text-gray-500">No se encontraron pacientes.</div>}
+              </div>
+            )}
+
+            {activeTab === "doctores" && (
+              <div className="space-y-6">
+                <DoctorAssignmentPanel
+                  patients={patients}
+                  doctors={allUsers.filter(u => u.role === "doctor")}
+                  assignments={assignments}
+                  onAssign={async (patientRut, doctorRut) => {
+                    await assignPatientToDoctor(patientRut, doctorRut);
+                    setAssignments(await getAssignments());
+                  }}
+                  onRemove={async (patientRut) => {
+                    await removeAssignment(patientRut);
+                    setAssignments(await getAssignments());
+                  }}
+                />
               </div>
             )}
 
@@ -1067,6 +1091,142 @@ function UserRoleModal({ user, onClose, onSave }: { user: User; onClose: () => v
           <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Cancelar</button>
           <button onClick={() => onSave(user.rut, role)} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">Guardar Cambios</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DoctorAssignmentPanel({
+  patients, doctors, assignments, onAssign, onRemove
+}: {
+  patients: User[];
+  doctors: User[];
+  assignments: PatientAssignment[];
+  onAssign: (patientRut: string, doctorRut: string) => void;
+  onRemove: (patientRut: string) => void;
+}) {
+  const [selectedDoctor, setSelectedDoctor] = useState(doctors[0]?.rut ?? "");
+  const [saving, setSaving] = useState<string | null>(null);
+
+  const getAssignedDoctor = (patientRut: string) =>
+    assignments.find(a => a.patientRut === patientRut);
+
+  const handleAssign = async (patientRut: string, doctorRut: string) => {
+    setSaving(patientRut);
+    await onAssign(patientRut, doctorRut);
+    setSaving(null);
+  };
+
+  const handleRemove = async (patientRut: string) => {
+    setSaving(patientRut);
+    await onRemove(patientRut);
+    setSaving(null);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Resumen de doctores */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {doctors.length === 0 ? (
+          <div className="col-span-full bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
+            <Stethoscope className="h-8 w-8 text-yellow-400 mx-auto mb-2" />
+            <p className="font-medium text-yellow-800">No hay doctores registrados</p>
+            <p className="text-sm text-yellow-600 mt-1">Pide al doctor que se registre en /register y luego cambia su rol a "doctor" desde la pestaña Usuarios.</p>
+          </div>
+        ) : doctors.map(doc => {
+          const docPatients = assignments.filter(a => a.doctorRut === doc.rut);
+          return (
+            <div key={doc.id} className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                  {doc.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900">{doc.name}</p>
+                  <p className="text-xs text-gray-400">{doc.rut}</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500">
+                <span className="font-medium text-primary-600">{docPatients.length}</span> paciente{docPatients.length !== 1 ? "s" : ""} asignado{docPatients.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Tabla de asignaciones */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h2 className="font-heading font-semibold text-gray-900">Asignar pacientes a doctores</h2>
+          <p className="text-sm text-gray-400 mt-0.5">Cada paciente puede tener un doctor principal asignado.</p>
+        </div>
+
+        {patients.length === 0 ? (
+          <div className="py-12 text-center text-gray-400">No hay pacientes registrados.</div>
+        ) : doctors.length === 0 ? (
+          <div className="py-12 text-center text-gray-400">Primero registra al menos un doctor.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-surface">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Paciente</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Doctor asignado</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Asignar / Cambiar</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {patients.map(p => {
+                  const assignment = getAssignedDoctor(p.rut);
+                  const assignedDoc = assignment ? doctors.find(d => d.rut === assignment.doctorRut) : null;
+                  const isSaving = saving === p.rut;
+                  return (
+                    <tr key={p.id} className="hover:bg-surface transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">{p.name}</div>
+                        <div className="text-xs text-gray-400">{p.rut}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {assignedDoc ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-sm font-medium border border-primary-200">
+                            <UserCheck className="h-3.5 w-3.5" /> {assignedDoc.name}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-50 text-gray-400 rounded-full text-sm border border-gray-200">
+                            <UserX className="h-3.5 w-3.5" /> Sin asignar
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <select
+                          defaultValue={assignment?.doctorRut ?? ""}
+                          onChange={e => e.target.value && handleAssign(p.rut, e.target.value)}
+                          disabled={isSaving}
+                          className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+                        >
+                          <option value="">Seleccionar doctor...</option>
+                          {doctors.map(d => <option key={d.rut} value={d.rut}>{d.name}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-6 py-4">
+                        {assignment && (
+                          <button
+                            onClick={() => handleRemove(p.rut)}
+                            disabled={isSaving}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                          >
+                            {isSaving ? "..." : <><UserX className="h-3.5 w-3.5" /> Quitar</>}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

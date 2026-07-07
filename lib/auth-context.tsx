@@ -8,6 +8,8 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isDoctor: boolean;
+  isPaciente: boolean;
   isLoading: boolean;
   login: (rut: string, password: string) => Promise<Session>;
   logout: () => Promise<void>;
@@ -22,19 +24,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
-    if (!data.session) {
-      setUser(null);
-      return;
-    }
+    if (!data.session) { setUser(null); return; }
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", data.session.user.id)
       .single();
-    if (error || !profile) {
-      setUser(null);
-      return;
-    }
+    if (error || !profile) { setUser(null); return; }
     setUser({
       id: profile.id,
       rut: profile.rut,
@@ -51,13 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     refreshUser().finally(() => setIsLoading(false));
-
-    // Mantiene el estado sincronizado si la sesión cambia en otra pestaña
-    // o expira (Supabase la refresca sola mientras la pestaña esté abierta).
-    const { data: listener } = supabase.auth.onAuthStateChange(() => {
-      refreshUser();
-    });
-
+    const { data: listener } = supabase.auth.onAuthStateChange(() => { refreshUser(); });
     return () => listener.subscription.unsubscribe();
   }, [refreshUser]);
 
@@ -73,17 +63,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isAdmin: user?.role === "admin",
-        isLoading,
-        login,
-        logout,
-        refreshUser,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user,
+      isAuthenticated: !!user,
+      isAdmin: user?.role === "admin",
+      isDoctor: user?.role === "doctor",
+      isPaciente: user?.role === "paciente",
+      isLoading,
+      login,
+      logout,
+      refreshUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );
