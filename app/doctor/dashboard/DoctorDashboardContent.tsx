@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -46,12 +46,11 @@ function DoctorDashboardInner() {
   const [editingTreatment, setEditingTreatment] = useState<Treatment | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     const pts = await getDoctorPatients(user.rut);
     setPatients(pts);
-    // Cargar todos los tratamientos y citas de todos los pacientes asignados
     const allTreatments: Treatment[] = [];
     const allAppointments: Appointment[] = [];
     for (const p of pts) {
@@ -63,33 +62,22 @@ function DoctorDashboardInner() {
     setTreatments(allTreatments);
     setAppointments(allAppointments);
     setLoading(false);
-  };
+  }, [user]);
 
-  useEffect(() => { loadData(); }, [user]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // Suscripción en tiempo real: se actualiza automáticamente cuando
-  // el admin asigna o quita un paciente de este doctor
   useEffect(() => {
     if (!user) return;
     const channel = supabase
-      .channel("doctor-assignments")
+      .channel(`doctor-assignments-${user.rut}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "patient_assignments",
-          filter: `doctor_rut=eq.${user.rut}`,
-        },
-        () => {
-          // Recarga los datos cuando cambia una asignación de este doctor
-          loadData();
-        }
+        { event: "*", schema: "public", table: "patient_assignments", filter: `doctor_rut=eq.${user.rut}` },
+        () => { loadData(); }
       )
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, loadData]);
 
   const openNewTreatment = (patient?: User) => {
     setEditingTreatment(null);
