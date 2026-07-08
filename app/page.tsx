@@ -17,7 +17,7 @@ const features = [
 
 const stats = [
   { icon: Users, value: "+2.400", label: "Pacientes atendidos" },
-  { icon: CalendarCheck, value: "12 años", label: "De experiencia" },
+  { icon: CalendarCheck, value: "11 años", label: "De experiencia" },
   { icon: ThumbsUp, value: "4.9 ★", label: "Satisfacción promedio" },
 ];
 
@@ -46,7 +46,7 @@ export default function Home() {
 
   // Decide a dónde va el botón "Agendar cita" según el estado de sesión
   const handleAgendarClick = () => {
-    if (!mounted || isLoading) return;
+    if (!mounted) return;
     if (isAdmin) {
       router.push("/admin");
     } else if (isDoctor) {
@@ -57,6 +57,15 @@ export default function Home() {
       router.push("/login");
     }
   };
+
+  // Si el usuario ya tiene sesión y llega a la home, redirigir automáticamente
+  useEffect(() => {
+    if (!mounted || isLoading) return;
+    // Solo redirigir si viene con sesión activa (no en primera visita)
+    if (isAdmin) router.prefetch("/admin");
+    if (isDoctor) router.prefetch("/doctor/dashboard");
+    if (isAuthenticated && !isAdmin && !isDoctor) router.prefetch("/paciente/dashboard");
+  }, [mounted, isLoading, isAdmin, isDoctor, isAuthenticated, router]);
 
   const ctaLabel = !mounted || isLoading || !isAuthenticated ? "Agenda tu cita" : "Mi panel";
 
