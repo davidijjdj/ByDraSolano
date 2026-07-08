@@ -46,6 +46,8 @@ export default function LoginPage() {
       const session = await login(rut, password);
       if (session.user.role === "admin") {
         router.push("/admin");
+      } else if (session.user.role === "doctor") {
+        router.push("/doctor/dashboard");
       } else {
         router.push("/paciente/dashboard");
       }
@@ -110,6 +112,11 @@ export default function LoginPage() {
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
+                </div>
+                <div className="mt-1 text-right">
+                  <Link href="/forgot-password" className="text-xs text-primary-600 hover:text-primary-700 font-medium">
+                    ¿Olvidaste tu contraseña?
+                  </Link>
                 </div>
               </div>
 

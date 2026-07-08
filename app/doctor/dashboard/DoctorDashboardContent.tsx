@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/lib/auth-context";
+import { supabase } from "@/lib/supabase";
 import {
   getDoctorPatients, getTreatments, getAppointments,
   addTreatment, updateTreatment, deleteTreatment,
@@ -65,6 +66,30 @@ function DoctorDashboardInner() {
   };
 
   useEffect(() => { loadData(); }, [user]);
+
+  // Suscripción en tiempo real: se actualiza automáticamente cuando
+  // el admin asigna o quita un paciente de este doctor
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("doctor-assignments")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "patient_assignments",
+          filter: `doctor_rut=eq.${user.rut}`,
+        },
+        () => {
+          // Recarga los datos cuando cambia una asignación de este doctor
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
 
   const openNewTreatment = (patient?: User) => {
     setEditingTreatment(null);
