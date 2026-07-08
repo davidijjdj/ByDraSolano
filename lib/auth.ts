@@ -544,12 +544,22 @@ export async function removeAssignment(patientRut: string): Promise<void> {
 }
 
 export async function getDoctorPatients(doctorRut: string): Promise<User[]> {
-  const { data, error } = await supabase
+  // Paso 1: traer los RUTs asignados desde patient_assignments
+  // (esta tabla el doctor sí puede leerla por la policy "doctor_select_own_assignments")
+  const { data: assignments, error: assignError } = await supabase
     .from("patient_assignments")
-    .select("patient:profiles!patient_assignments_patient_rut_fkey(*)")
+    .select("patient_rut")
     .eq("doctor_rut", doctorRut);
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row: any) => rowToUser(row.patient));
+  if (assignError || !assignments || assignments.length === 0) return [];
+
+  // Paso 2: traer los perfiles de esos RUTs
+  const ruts = assignments.map((a: any) => a.patient_rut);
+  const { data: profiles, error: profileError } = await supabase
+    .from("profiles")
+    .select("*")
+    .in("rut", ruts);
+  if (profileError || !profiles) return [];
+  return profiles.map(rowToUser);
 }
 
 export async function getPatientDoctor(patientRut: string): Promise<User | null> {

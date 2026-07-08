@@ -49,19 +49,22 @@ function DoctorDashboardInner() {
   const loadData = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const pts = await getDoctorPatients(user.rut);
-    setPatients(pts);
-    const allTreatments: Treatment[] = [];
-    const allAppointments: Appointment[] = [];
-    for (const p of pts) {
-      const t = await getTreatments(p.rut);
-      const a = await getAppointments(p.rut);
-      allTreatments.push(...t);
-      allAppointments.push(...a);
+    try {
+      const pts = await getDoctorPatients(user.rut);
+      setPatients(pts);
+      const allTreatments: Treatment[] = [];
+      const allAppointments: Appointment[] = [];
+      for (const p of pts) {
+        const t = await getTreatments(p.rut);
+        const a = await getAppointments(p.rut);
+        allTreatments.push(...t);
+        allAppointments.push(...a);
+      }
+      setTreatments(allTreatments);
+      setAppointments(allAppointments);
+    } finally {
+      setLoading(false);
     }
-    setTreatments(allTreatments);
-    setAppointments(allAppointments);
-    setLoading(false);
   }, [user]);
 
   useEffect(() => { loadData(); }, [loadData]);
