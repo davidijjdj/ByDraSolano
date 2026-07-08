@@ -17,7 +17,7 @@ const features = [
 
 const stats = [
   { icon: Users, value: "+2.400", label: "Pacientes atendidos" },
-  { icon: CalendarCheck, value: "11 años", label: "De experiencia" },
+  { icon: CalendarCheck, value: "12 años", label: "De experiencia" },
   { icon: ThumbsUp, value: "4.9 ★", label: "Satisfacción promedio" },
 ];
 
@@ -35,7 +35,7 @@ const avatarColors = [
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthenticated, isAdmin, isLoading } = useAuth();
+  const { isAuthenticated, isAdmin, isDoctor, isLoading } = useAuth();
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [mounted, setMounted] = useState(false);
 
@@ -49,12 +49,16 @@ export default function Home() {
     if (!mounted || isLoading) return;
     if (isAdmin) {
       router.push("/admin");
+    } else if (isDoctor) {
+      router.push("/doctor/dashboard");
     } else if (isAuthenticated) {
       router.push("/paciente/dashboard");
     } else {
       router.push("/login");
     }
   };
+
+  const ctaLabel = !mounted || isLoading || !isAuthenticated ? "Agenda tu cita" : "Mi panel";
 
   if (!mounted) return <div suppressHydrationWarning />;
 
@@ -86,7 +90,7 @@ export default function Home() {
                   onClick={handleAgendarClick}
                   className="inline-flex items-center justify-center px-8 py-4 bg-cta-500 hover:bg-cta-600 text-white font-semibold rounded-lg transition-all hover:-translate-y-0.5 hover:shadow-lg"
                 >
-                  {isAuthenticated ? "Ir a mi panel" : "Agenda tu cita"} <ArrowRight className="ml-2 h-5 w-5" />
+                  {ctaLabel} <ArrowRight className="ml-2 h-5 w-5" />
                 </button>
                 <Link
                   href="#testimonios"
@@ -190,7 +194,7 @@ export default function Home() {
               onClick={handleAgendarClick}
               className="inline-flex items-center justify-center px-8 py-4 bg-cta-500 hover:bg-cta-600 text-white font-semibold rounded-lg transition-all hover:-translate-y-0.5 hover:shadow-lg"
             >
-              {isAuthenticated ? "Ir a mi panel" : "Agendar mi cita"} <ArrowRight className="ml-2 h-5 w-5" />
+              {ctaLabel} <ArrowRight className="ml-2 h-5 w-5" />
             </button>
           </div>
         </section>
