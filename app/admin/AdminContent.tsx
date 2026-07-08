@@ -727,8 +727,10 @@ const handleDeleteAppointment = async (id: string) => {
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
-                            u.role === "admin" ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-blue-50 text-blue-700 border-blue-200"
-                          }`}>{u.role === "admin" ? "Admin" : "Paciente"}</span>
+                            u.role === "admin" ? "bg-purple-50 text-purple-700 border-purple-200" :
+                            u.role === "doctor" ? "bg-green-50 text-green-700 border-green-200" :
+                            "bg-blue-50 text-blue-700 border-blue-200"
+                          }`}>{u.role === "admin" ? "Admin" : u.role === "doctor" ? "Doctor" : "Paciente"}</span>
                           <button onClick={() => openModal("user", u)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit3 className="h-4 w-4" /></button>
                         </div>
                       </div>
@@ -759,9 +761,11 @@ const handleDeleteAppointment = async (id: string) => {
                           <td className="px-6 py-4 text-gray-600">{u.email}</td>
                           <td className="px-6 py-4">
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${
-                              u.role === "admin" ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                              u.role === "admin" ? "bg-purple-50 text-purple-700 border-purple-200" :
+                              u.role === "doctor" ? "bg-green-50 text-green-700 border-green-200" :
+                              "bg-blue-50 text-blue-700 border-blue-200"
                             }`}>
-                              {u.role === "admin" ? "Administrador" : "Paciente"}
+                              {u.role === "admin" ? "Administrador" : u.role === "doctor" ? "Doctor" : "Paciente"}
                             </span>
                           </td>
                           <td className="px-6 py-4 text-gray-600 text-sm">{new Date(u.createdAt).toLocaleDateString("es-CL")}</td>

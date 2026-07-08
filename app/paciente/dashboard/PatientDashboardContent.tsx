@@ -7,7 +7,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/lib/auth-context";
 import {
   getTreatments, getAgendaConfig, getAppointments, addAppointment,
-  updateAppointment, updateUser, calculateAge, getPatientDoctor,
+  updateAppointment, updateUser, calculateAge, getPatientDoctor, getUsers,
   Treatment, AgendaConfig, Appointment, User as UserType
 } from "@/lib/auth";
 import {
@@ -16,7 +16,6 @@ import {
   CalendarPlus, CalendarCheck, CalendarX, Loader2
 } from "lucide-react";
 
-const DENTISTS = ["Dr. Andrés Pérez", "Dra. Camila Rojas", "Dr. Felipe Martínez", "Dra. Valentina López"];
 const TREATMENT_TYPES = ["Revisión General", "Limpieza Dental", "Obturación", "Endodoncia", "Extracción", "Blanqueamiento", "Ortodoncia", "Prótesis Dental", "Otro"];
 
 function generateTimeSlots(start: string, end: string, bookedTimes: string[]): string[] {
@@ -53,6 +52,7 @@ function PatientDashboardInner() {
   const [agenda, setAgenda] = useState<AgendaConfig | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [assignedDoctor, setAssignedDoctor] = useState<UserType | null>(null);
+  const [availableDoctors, setAvailableDoctors] = useState<UserType[]>([]);
   const [editingProfile, setEditingProfile] = useState(false);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -64,7 +64,7 @@ function PatientDashboardInner() {
     phone: user?.phone || "",
   });
   const [bookingForm, setBookingForm] = useState({
-    date: "", time: "", dentist: DENTISTS[0], treatment: TREATMENT_TYPES[0], notes: "",
+    date: "", time: "", dentist: "", treatment: TREATMENT_TYPES[0], notes: "",
   });
   const [bookingError, setBookingError] = useState("");
   const [bookingSuccess, setBookingSuccess] = useState(false);
@@ -80,6 +80,9 @@ function PatientDashboardInner() {
       if (doctor) {
         setBookingForm(prev => ({ ...prev, dentist: doctor.name }));
       }
+      // Cargar todos los doctores registrados para el selector de citas
+      const allUsers = await getUsers();
+      setAvailableDoctors(allUsers.filter(u => u.role === "doctor"));
       setProfileForm({
         birthDate: user.birthDate || "",
         diseases: user.diseases || "",
@@ -359,22 +362,61 @@ function PatientDashboardInner() {
                     {bookingForm.date && availableSlots.length === 0 && !agenda.enabledDates.includes(bookingForm.date) && <p className="text-xs text-red-600 mt-1">No hay horarios disponibles</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Doctora a cargo</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Doctor</label>
                     {assignedDoctor ? (
-                      <div className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                          {assignedDoctor.name.split(" ").slice(0, 2).map((n: string) => n[0]).join("")}
+                      <div>
+                        <div className="w-full px-3 py-2 rounded-lg border border-primary-200 bg-primary-50 flex items-center gap-2 mb-2">
+                          <div className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                            {assignedDoctor.name.split(" ").slice(0, 2).map((n: string) => n[0]).join("")}
+                          </div>
+                          <div>
+                            <span className="text-sm font-medium text-gray-900">{assignedDoctor.name}</span>
+                            {assignedDoctor.specialty && (
+                              <span className="text-xs text-primary-600 ml-2">{assignedDoctor.specialty}</span>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-sm font-medium text-gray-900">{assignedDoctor.name}</span>
-                          {assignedDoctor.specialty && (
-                            <span className="text-xs text-primary-600 ml-2">{assignedDoctor.specialty}</span>
-                          )}
-                        </div>
+                        {availableDoctors.filter(d => d.rut !== assignedDoctor.rut).length > 0 && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">¿Necesitas un especialista?</p>
+                            <select
+                              value={bookingForm.dentist === assignedDoctor.name ? "" : bookingForm.dentist}
+                              onChange={e => setBookingForm({ ...bookingForm, dentist: e.target.value || assignedDoctor.name })}
+                              className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                            >
+                              <option value="">Mi doctor ({assignedDoctor.name})</option>
+                              {availableDoctors
+                                .filter(d => d.rut !== assignedDoctor.rut)
+                                .map(d => (
+                                  <option key={d.rut} value={d.name}>
+                                    {d.name}{d.specialty ? ` — ${d.specialty}` : ""}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        )}
                       </div>
                     ) : (
-                      <div className="w-full px-3 py-2 rounded-lg border border-yellow-200 bg-yellow-50 text-sm text-yellow-700">
-                        No tienes un doctor asignado aún. Contacta a la clínica.
+                      <div>
+                        <div className="w-full px-3 py-2 rounded-lg border border-yellow-200 bg-yellow-50 text-sm text-yellow-700 mb-2">
+                          No tienes un doctor asignado. Puedes elegir un especialista disponible.
+                        </div>
+                        {availableDoctors.length > 0 ? (
+                          <select
+                            value={bookingForm.dentist}
+                            onChange={e => setBookingForm({ ...bookingForm, dentist: e.target.value })}
+                            className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          >
+                            <option value="">Selecciona un doctor...</option>
+                            {availableDoctors.map(d => (
+                              <option key={d.rut} value={d.name}>
+                                {d.name}{d.specialty ? ` — ${d.specialty}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <p className="text-xs text-gray-400">No hay doctores disponibles en este momento.</p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -392,7 +434,7 @@ function PatientDashboardInner() {
                 <div className="mt-4">
                   <button
                     onClick={handleBookAppointment}
-                    disabled={savingBooking || !assignedDoctor}
+                    disabled={savingBooking || !bookingForm.dentist}
                     className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
                   >
                     {savingBooking ? <><Loader2 className="h-4 w-4 animate-spin" /> Agendando...</> : <><CalendarPlus className="h-4 w-4" /> Confirmar cita</>}
